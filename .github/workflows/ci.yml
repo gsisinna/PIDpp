@@ -1,0 +1,83 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    name: ${{ matrix.compiler }} ${{ matrix.build_type }} sanitizers=${{ matrix.sanitizers }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc
+            cxx: g++-13
+            cc: gcc-13
+            build_type: Debug
+            sanitizers: OFF
+          - compiler: gcc
+            cxx: g++-13
+            cc: gcc-13
+            build_type: Release
+            sanitizers: OFF
+          - compiler: clang
+            cxx: clang++-17
+            cc: clang-17
+            build_type: Debug
+            sanitizers: ON
+          - compiler: clang
+            cxx: clang++-17
+            cc: clang-17
+            build_type: Release
+            sanitizers: OFF
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install compilers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-13 g++-13 clang-17
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_C_COMPILER=${{ matrix.cc }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+          -DPIDPP_BUILD_TESTS=ON
+          -DPIDPP_BUILD_EXAMPLES=ON
+          -DPIDPP_ENABLE_SANITIZERS=${{ matrix.sanitizers }}
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  clang-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+      - name: Check formatting
+        run: |
+          find include src tests examples benchmarks \( -name '*.hpp' -o -name '*.cpp' \) | xargs clang-format --dry-run --Werror
+
+  clang-tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy clang cmake
+      - name: Configure compile database
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPIDPP_BUILD_TESTS=OFF -DPIDPP_BUILD_EXAMPLES=OFF
+      - name: Run clang-tidy on library sources
+        run: clang-tidy -p build src/version.cpp

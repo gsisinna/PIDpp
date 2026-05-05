@@ -1,0 +1,8 @@
+{
+  "name": "pidpp",
+  "version-semver": "0.1.0",
+  "description": "PIDPP Control Engine for robotics and embedded systems",
+  "homepage": "https://github.com/pidpp/pidpp",
+  "license": "MIT",
+  "dependencies": []
+}
