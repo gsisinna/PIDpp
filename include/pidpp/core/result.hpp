@@ -28,45 +28,36 @@ struct Error {
 };
 
 class Result {
-public:
+  public:
     constexpr Result() noexcept = default;
 
-    constexpr Result(ErrorCode code, const char* message) noexcept
-        : error_{code, message}
-    {
-    }
+    constexpr Result(ErrorCode code, const char* message) noexcept : error_{code, message} {}
 
-    [[nodiscard]] constexpr explicit operator bool() const noexcept
-    {
+    [[nodiscard]] constexpr explicit operator bool() const noexcept {
         return error_.code == ErrorCode::None;
     }
 
-    [[nodiscard]] constexpr ErrorCode code() const noexcept
-    {
+    [[nodiscard]] constexpr ErrorCode code() const noexcept {
         return error_.code;
     }
 
-    [[nodiscard]] constexpr const char* message() const noexcept
-    {
+    [[nodiscard]] constexpr const char* message() const noexcept {
         return error_.message;
     }
 
-    [[nodiscard]] constexpr Error error() const noexcept
-    {
+    [[nodiscard]] constexpr Error error() const noexcept {
         return error_;
     }
 
-    [[nodiscard]] static constexpr Result ok() noexcept
-    {
+    [[nodiscard]] static constexpr Result ok() noexcept {
         return {};
     }
 
-    [[nodiscard]] static constexpr Result error(ErrorCode code, const char* message) noexcept
-    {
+    [[nodiscard]] static constexpr Result error(ErrorCode code, const char* message) noexcept {
         return {code, message};
     }
 
-private:
+  private:
     Error error_{};
 };
 

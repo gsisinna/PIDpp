@@ -3,8 +3,7 @@
 
 #include <pidpp/pidpp.hpp>
 
-int main()
-{
+int main() {
     std::array<double, 1000> time{};
     std::array<double, 1000> output{};
     pidpp::FirstOrderPlant<double> plant{1.0, 0.2};

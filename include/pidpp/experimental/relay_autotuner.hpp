@@ -4,7 +4,6 @@
 
 namespace pidpp::experimental {
 
-template <std::floating_point T>
-using RelayAutoTuner = pidpp::RelayAutotuner<T>;
+template <std::floating_point T> using RelayAutoTuner = pidpp::RelayAutotuner<T>;
 
 } // namespace pidpp::experimental

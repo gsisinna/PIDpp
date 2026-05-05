@@ -9,8 +9,7 @@
 
 namespace pidpp {
 
-template <std::floating_point T>
-struct PidState {
+template <std::floating_point T> struct PidState {
     T error{0};
     T previous_error{0};
     T previous_measurement{0};
@@ -34,27 +33,18 @@ struct PidState {
  * inside this object. Validate PidConfig before constructing controllers used
  * in safety-critical loops.
  */
-template <std::floating_point T>
-class PidController {
-public:
+template <std::floating_point T> class PidController {
+  public:
     explicit constexpr PidController(const PidConfig<T>& config) noexcept
-        : config_{config},
-          derivative_filter_{config.derivative_filter_tau},
-          feedforward_{config.feedforward}
-    {
-    }
+        : config_{config}, derivative_filter_{config.derivative_filter_tau},
+          feedforward_{config.feedforward} {}
 
-    [[nodiscard]] T update(T setpoint, T measurement, T dt) noexcept
-    {
+    [[nodiscard]] T update(T setpoint, T measurement, T dt) noexcept {
         return update(setpoint, measurement, dt, T{0}, T{0});
     }
 
-    [[nodiscard]] T update(T setpoint,
-                           T measurement,
-                           T dt,
-                           T feedforward_velocity,
-                           T feedforward_acceleration) noexcept
-    {
+    [[nodiscard]] T update(T setpoint, T measurement, T dt, T feedforward_velocity,
+                           T feedforward_acceleration) noexcept {
         // Real-time contract: invalid inputs preserve the previous command
         // without throwing, logging, or allocating.
         if (!validate_time_step(dt) || !is_finite(setpoint) || !is_finite(measurement)) {
@@ -76,27 +66,23 @@ public:
         state_.proportional_term = config_.kp * error;
         state_.derivative = calculate_derivative(error, measurement, dt);
         state_.derivative_term = config_.kd * state_.derivative;
-        state_.feedforward_term = feedforward_.calculate(feedforward_velocity, feedforward_acceleration);
+        state_.feedforward_term =
+            feedforward_.calculate(feedforward_velocity, feedforward_acceleration);
 
-        const T candidate_integral = clamp(
-            state_.integral + (error * dt),
-            config_.integral_min,
-            config_.integral_max);
+        const T candidate_integral =
+            clamp(state_.integral + (error * dt), config_.integral_min, config_.integral_max);
 
         const T candidate_integral_term = config_.ki * candidate_integral;
-        const T candidate_output = state_.proportional_term +
-                                   candidate_integral_term +
-                                   state_.derivative_term +
-                                   state_.feedforward_term;
-        const T saturated_candidate = clamp(candidate_output, config_.output_min, config_.output_max);
+        const T candidate_output = state_.proportional_term + candidate_integral_term +
+                                   state_.derivative_term + state_.feedforward_term;
+        const T saturated_candidate =
+            clamp(candidate_output, config_.output_min, config_.output_max);
 
         apply_anti_windup(error, dt, candidate_integral, candidate_output, saturated_candidate);
 
         state_.integral_term = config_.ki * state_.integral;
-        state_.unsaturated_output = state_.proportional_term +
-                                    state_.integral_term +
-                                    state_.derivative_term +
-                                    state_.feedforward_term;
+        state_.unsaturated_output = state_.proportional_term + state_.integral_term +
+                                    state_.derivative_term + state_.feedforward_term;
         state_.output = clamp(state_.unsaturated_output, config_.output_min, config_.output_max);
         state_.saturated = state_.output != state_.unsaturated_output;
         state_.previous_error = error;
@@ -104,48 +90,41 @@ public:
         return state_.output;
     }
 
-    constexpr void reset() noexcept
-    {
+    constexpr void reset() noexcept {
         state_ = {};
         derivative_filter_.reset();
     }
 
-    constexpr void reset_integral(T integral = T{0}) noexcept
-    {
+    constexpr void reset_integral(T integral = T{0}) noexcept {
         state_.integral = clamp(integral, config_.integral_min, config_.integral_max);
     }
 
-    constexpr void set_config(const PidConfig<T>& config) noexcept
-    {
+    constexpr void set_config(const PidConfig<T>& config) noexcept {
         config_ = config;
         derivative_filter_.set_tau(config.derivative_filter_tau);
         feedforward_.set_config(config.feedforward);
         state_.integral = clamp(state_.integral, config_.integral_min, config_.integral_max);
     }
 
-    constexpr void set_gains(T kp, T ki, T kd) noexcept
-    {
+    constexpr void set_gains(T kp, T ki, T kd) noexcept {
         config_.kp = kp;
         config_.ki = ki;
         config_.kd = kd;
     }
 
-    [[nodiscard]] constexpr const PidConfig<T>& config() const noexcept
-    {
+    [[nodiscard]] constexpr const PidConfig<T>& config() const noexcept {
         return config_;
     }
 
-    [[nodiscard]] constexpr const PidState<T>& state() const noexcept
-    {
+    [[nodiscard]] constexpr const PidState<T>& state() const noexcept {
         return state_;
     }
 
-private:
-    [[nodiscard]] T calculate_derivative(T error, T measurement, T dt) noexcept
-    {
+  private:
+    [[nodiscard]] T calculate_derivative(T error, T measurement, T dt) noexcept {
         const T raw_derivative = config_.derivative_mode == DerivativeMode::OnError
-            ? (error - state_.previous_error) / dt
-            : -(measurement - state_.previous_measurement) / dt;
+                                     ? (error - state_.previous_error) / dt
+                                     : -(measurement - state_.previous_measurement) / dt;
 
         if (config_.derivative_filter_tau > T{0}) {
             return derivative_filter_.update(raw_derivative, dt);
@@ -153,12 +132,8 @@ private:
         return raw_derivative;
     }
 
-    void apply_anti_windup(T error,
-                           T dt,
-                           T candidate_integral,
-                           T candidate_output,
-                           T saturated_candidate) noexcept
-    {
+    void apply_anti_windup(T error, T dt, T candidate_integral, T candidate_output,
+                           T saturated_candidate) noexcept {
         switch (config_.anti_windup) {
         case AntiWindupStrategy::None:
             state_.integral = candidate_integral;
@@ -174,8 +149,10 @@ private:
             }
             break;
         case AntiWindupStrategy::BackCalculation: {
-            const T correction = config_.back_calculation_gain * (saturated_candidate - candidate_output) * dt;
-            state_.integral = clamp(candidate_integral + correction, config_.integral_min, config_.integral_max);
+            const T correction =
+                config_.back_calculation_gain * (saturated_candidate - candidate_output) * dt;
+            state_.integral =
+                clamp(candidate_integral + correction, config_.integral_min, config_.integral_max);
             break;
         }
         }

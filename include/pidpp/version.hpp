@@ -7,23 +7,19 @@
 
 namespace pidpp {
 
-[[nodiscard]] constexpr int version_major() noexcept
-{
+[[nodiscard]] constexpr int version_major() noexcept {
     return PIDPP_VERSION_MAJOR;
 }
 
-[[nodiscard]] constexpr int version_minor() noexcept
-{
+[[nodiscard]] constexpr int version_minor() noexcept {
     return PIDPP_VERSION_MINOR;
 }
 
-[[nodiscard]] constexpr int version_patch() noexcept
-{
+[[nodiscard]] constexpr int version_patch() noexcept {
     return PIDPP_VERSION_PATCH;
 }
 
-[[nodiscard]] constexpr const char* version_string() noexcept
-{
+[[nodiscard]] constexpr const char* version_string() noexcept {
     return PIDPP_VERSION_STRING;
 }
 

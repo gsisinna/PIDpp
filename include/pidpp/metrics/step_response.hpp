@@ -11,8 +11,7 @@ namespace pidpp {
 /**
  * Offline metrics for step-response analysis.
  */
-template <std::floating_point T>
-struct StepResponseMetrics {
+template <std::floating_point T> struct StepResponseMetrics {
     T final_value{0};
     T peak_value{0};
     T overshoot_percent{0};
@@ -23,10 +22,8 @@ struct StepResponseMetrics {
 
 template <std::floating_point T>
 [[nodiscard]] StepResponseMetrics<T> analyze_step_response(std::span<const T> time,
-                                                           std::span<const T> output,
-                                                           T target,
-                                                           T settling_band = T{0.02}) noexcept
-{
+                                                           std::span<const T> output, T target,
+                                                           T settling_band = T{0.02}) noexcept {
     StepResponseMetrics<T> metrics{};
     if (time.empty() || output.empty() || time.size() != output.size() || target == T{0}) {
         return metrics;

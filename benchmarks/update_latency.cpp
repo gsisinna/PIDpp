@@ -6,20 +6,18 @@
 
 namespace {
 
-static void update_latency(benchmark::State& state)
-{
-    pidpp::PidConfig<double> config{
-        .kp = 1.2,
-        .ki = 0.4,
-        .kd = 0.05,
-        .output_min = -12.0,
-        .output_max = 12.0,
-        .integral_min = -10.0,
-        .integral_max = 10.0,
-        .anti_windup = pidpp::AntiWindupStrategy::ConditionalIntegration,
-        .derivative_mode = pidpp::DerivativeMode::OnMeasurement,
-        .derivative_filter_tau = 0.02
-    };
+static void update_latency(benchmark::State& state) {
+    pidpp::PidConfig<double> config{.kp = 1.2,
+                                    .ki = 0.4,
+                                    .kd = 0.05,
+                                    .output_min = -12.0,
+                                    .output_max = 12.0,
+                                    .integral_min = -10.0,
+                                    .integral_max = 10.0,
+                                    .anti_windup =
+                                        pidpp::AntiWindupStrategy::ConditionalIntegration,
+                                    .derivative_mode = pidpp::DerivativeMode::OnMeasurement,
+                                    .derivative_filter_tau = 0.02};
     pidpp::PidController<double> controller{config};
 
     for (auto _ : state) {
@@ -29,19 +27,16 @@ static void update_latency(benchmark::State& state)
 
 BENCHMARK(update_latency);
 
-static void pid_update_without_filter(benchmark::State& state)
-{
-    pidpp::PidConfig<double> config{
-        .kp = 1.2,
-        .ki = 0.4,
-        .kd = 0.05,
-        .output_min = -12.0,
-        .output_max = 12.0,
-        .integral_min = -10.0,
-        .integral_max = 10.0,
-        .anti_windup = pidpp::AntiWindupStrategy::None,
-        .derivative_mode = pidpp::DerivativeMode::OnError
-    };
+static void pid_update_without_filter(benchmark::State& state) {
+    pidpp::PidConfig<double> config{.kp = 1.2,
+                                    .ki = 0.4,
+                                    .kd = 0.05,
+                                    .output_min = -12.0,
+                                    .output_max = 12.0,
+                                    .integral_min = -10.0,
+                                    .integral_max = 10.0,
+                                    .anti_windup = pidpp::AntiWindupStrategy::None,
+                                    .derivative_mode = pidpp::DerivativeMode::OnError};
     pidpp::PidController<double> controller{config};
 
     for (auto _ : state) {
@@ -49,20 +44,18 @@ static void pid_update_without_filter(benchmark::State& state)
     }
 }
 
-static void pid_update_with_derivative_filter(benchmark::State& state)
-{
-    pidpp::PidConfig<double> config{
-        .kp = 1.2,
-        .ki = 0.4,
-        .kd = 0.05,
-        .output_min = -12.0,
-        .output_max = 12.0,
-        .integral_min = -10.0,
-        .integral_max = 10.0,
-        .anti_windup = pidpp::AntiWindupStrategy::ConditionalIntegration,
-        .derivative_mode = pidpp::DerivativeMode::OnMeasurement,
-        .derivative_filter_tau = 0.02
-    };
+static void pid_update_with_derivative_filter(benchmark::State& state) {
+    pidpp::PidConfig<double> config{.kp = 1.2,
+                                    .ki = 0.4,
+                                    .kd = 0.05,
+                                    .output_min = -12.0,
+                                    .output_max = 12.0,
+                                    .integral_min = -10.0,
+                                    .integral_max = 10.0,
+                                    .anti_windup =
+                                        pidpp::AntiWindupStrategy::ConditionalIntegration,
+                                    .derivative_mode = pidpp::DerivativeMode::OnMeasurement,
+                                    .derivative_filter_tau = 0.02};
     pidpp::PidController<double> controller{config};
 
     for (auto _ : state) {
@@ -70,18 +63,15 @@ static void pid_update_with_derivative_filter(benchmark::State& state)
     }
 }
 
-static void pi_update(benchmark::State& state)
-{
-    pidpp::PidConfig<double> config{
-        .kp = 1.0,
-        .ki = 0.25,
-        .kd = 0.0,
-        .output_min = -12.0,
-        .output_max = 12.0,
-        .integral_min = -10.0,
-        .integral_max = 10.0,
-        .anti_windup = pidpp::AntiWindupStrategy::Clamping
-    };
+static void pi_update(benchmark::State& state) {
+    pidpp::PidConfig<double> config{.kp = 1.0,
+                                    .ki = 0.25,
+                                    .kd = 0.0,
+                                    .output_min = -12.0,
+                                    .output_max = 12.0,
+                                    .integral_min = -10.0,
+                                    .integral_max = 10.0,
+                                    .anti_windup = pidpp::AntiWindupStrategy::Clamping};
     pidpp::PidController<double> controller{config};
 
     for (auto _ : state) {
@@ -89,18 +79,15 @@ static void pi_update(benchmark::State& state)
     }
 }
 
-static void saturated_pid_update(benchmark::State& state)
-{
-    pidpp::PidConfig<double> config{
-        .kp = 100.0,
-        .ki = 10.0,
-        .kd = 1.0,
-        .output_min = -1.0,
-        .output_max = 1.0,
-        .integral_min = -2.0,
-        .integral_max = 2.0,
-        .anti_windup = pidpp::AntiWindupStrategy::BackCalculation
-    };
+static void saturated_pid_update(benchmark::State& state) {
+    pidpp::PidConfig<double> config{.kp = 100.0,
+                                    .ki = 10.0,
+                                    .kd = 1.0,
+                                    .output_min = -1.0,
+                                    .output_max = 1.0,
+                                    .integral_min = -2.0,
+                                    .integral_max = 2.0,
+                                    .anti_windup = pidpp::AntiWindupStrategy::BackCalculation};
     pidpp::PidController<double> controller{config};
 
     for (auto _ : state) {

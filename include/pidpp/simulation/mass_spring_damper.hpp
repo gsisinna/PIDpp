@@ -9,16 +9,12 @@ namespace pidpp {
 /**
  * Simple mass-spring-damper simulation model.
  */
-template <std::floating_point T>
-class MassSpringDamper {
-public:
+template <std::floating_point T> class MassSpringDamper {
+  public:
     constexpr MassSpringDamper(T mass, T damping, T stiffness) noexcept
-        : mass_{mass}, damping_{damping}, stiffness_{stiffness}
-    {
-    }
+        : mass_{mass}, damping_{damping}, stiffness_{stiffness} {}
 
-    [[nodiscard]] constexpr T update(T force, T dt) noexcept
-    {
+    [[nodiscard]] constexpr T update(T force, T dt) noexcept {
         if (!is_finite(dt) || dt <= T{0} || mass_ <= T{0}) {
             return position_;
         }
@@ -28,23 +24,20 @@ public:
         return position_;
     }
 
-    constexpr void reset(T position = T{0}, T velocity = T{0}) noexcept
-    {
+    constexpr void reset(T position = T{0}, T velocity = T{0}) noexcept {
         position_ = position;
         velocity_ = velocity;
     }
 
-    [[nodiscard]] constexpr T position() const noexcept
-    {
+    [[nodiscard]] constexpr T position() const noexcept {
         return position_;
     }
 
-    [[nodiscard]] constexpr T velocity() const noexcept
-    {
+    [[nodiscard]] constexpr T velocity() const noexcept {
         return velocity_;
     }
 
-private:
+  private:
     T mass_{1};
     T damping_{0};
     T stiffness_{0};

@@ -2,8 +2,7 @@
 
 namespace pidpp {
 
-const char* version() noexcept
-{
+const char* version() noexcept {
     return version_string();
 }
 

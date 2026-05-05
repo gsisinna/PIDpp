@@ -5,8 +5,7 @@
 
 using Catch::Matchers::WithinAbs;
 
-TEST_CASE("first-order plant moves toward steady state")
-{
+TEST_CASE("first-order plant moves toward steady state") {
     pidpp::FirstOrderPlant<double> plant{2.0, 1.0};
 
     const double y0 = plant.update(1.0, 0.1);
@@ -17,8 +16,7 @@ TEST_CASE("first-order plant moves toward steady state")
     REQUIRE(y1 < 2.0);
 }
 
-TEST_CASE("DC motor speed increases under positive voltage")
-{
+TEST_CASE("DC motor speed increases under positive voltage") {
     pidpp::DcMotor<double> motor{2.0, 0.01, 0.1, 0.1, 0.01, 0.001};
 
     const double w0 = motor.update(6.0, 0.0, 0.001);
@@ -32,8 +30,7 @@ TEST_CASE("DC motor speed increases under positive voltage")
     REQUIRE(motor.current() > 0.0);
 }
 
-TEST_CASE("mass spring damper responds to force")
-{
+TEST_CASE("mass spring damper responds to force") {
     pidpp::MassSpringDamper<double> plant{1.0, 0.2, 2.0};
 
     const double p0 = plant.update(1.0, 0.01);

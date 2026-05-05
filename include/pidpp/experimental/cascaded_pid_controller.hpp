@@ -11,8 +11,7 @@ namespace pidpp::experimental {
  *
  * Experimental APIs are source-unstable and may change in any release.
  */
-template <std::floating_point T>
-struct CascadedPidControllerConfig {
+template <std::floating_point T> struct CascadedPidControllerConfig {
     PidConfig<T> outer{};
     PidConfig<T> inner{};
 };

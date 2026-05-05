@@ -6,10 +6,10 @@
 
 #include <pidpp/pidpp.hpp>
 
-TEST_CASE("result and error are small value types")
-{
+TEST_CASE("result and error are small value types") {
     constexpr auto ok = pidpp::Result::ok();
-    constexpr auto error = pidpp::Result::error(pidpp::ErrorCode::InvalidConfiguration, "bad config");
+    constexpr auto error =
+        pidpp::Result::error(pidpp::ErrorCode::InvalidConfiguration, "bad config");
 
     STATIC_REQUIRE(std::is_trivially_copyable_v<pidpp::Error>);
     STATIC_REQUIRE(std::is_trivially_copyable_v<pidpp::Result>);
@@ -19,8 +19,7 @@ TEST_CASE("result and error are small value types")
     REQUIRE(error.error().message[0] == 'b');
 }
 
-TEST_CASE("version API reports SDK version")
-{
+TEST_CASE("version API reports SDK version") {
     REQUIRE(PIDPP_VERSION_MAJOR == 0);
     REQUIRE(PIDPP_VERSION_MINOR == 1);
     REQUIRE(PIDPP_VERSION_PATCH == 0);
@@ -31,15 +30,13 @@ TEST_CASE("version API reports SDK version")
     REQUIRE(std::string_view{pidpp::version()} == "0.1.0");
 }
 
-TEST_CASE("default PID config is valid")
-{
+TEST_CASE("default PID config is valid") {
     pidpp::PidConfig<double> config{};
 
     REQUIRE(config.validate());
 }
 
-TEST_CASE("negative gain is invalid")
-{
+TEST_CASE("negative gain is invalid") {
     pidpp::PidConfig<double> config{};
     config.kp = -1.0;
 
@@ -49,8 +46,7 @@ TEST_CASE("negative gain is invalid")
     REQUIRE(result.code() == pidpp::ErrorCode::InvalidGain);
 }
 
-TEST_CASE("inverted output range is invalid")
-{
+TEST_CASE("inverted output range is invalid") {
     pidpp::PidConfig<double> config{};
     config.output_min = 1.0;
     config.output_max = -1.0;
@@ -61,8 +57,7 @@ TEST_CASE("inverted output range is invalid")
     REQUIRE(result.code() == pidpp::ErrorCode::InvalidOutputLimits);
 }
 
-TEST_CASE("non finite gain is invalid")
-{
+TEST_CASE("non finite gain is invalid") {
     pidpp::PidConfig<double> config{};
     config.kd = std::numeric_limits<double>::infinity();
 
@@ -72,8 +67,7 @@ TEST_CASE("non finite gain is invalid")
     REQUIRE(result.code() == pidpp::ErrorCode::InvalidGain);
 }
 
-TEST_CASE("time step validation rejects zero")
-{
+TEST_CASE("time step validation rejects zero") {
     const auto result = pidpp::validate_time_step(0.0);
 
     REQUIRE_FALSE(result);

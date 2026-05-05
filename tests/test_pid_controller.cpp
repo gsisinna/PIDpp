@@ -17,8 +17,7 @@ std::atomic<int> allocation_count{0};
 
 } // namespace
 
-void* operator new(std::size_t size)
-{
+void* operator new(std::size_t size) {
     if (track_allocations.load(std::memory_order_relaxed)) {
         allocation_count.fetch_add(1, std::memory_order_relaxed);
     }
@@ -28,20 +27,17 @@ void* operator new(std::size_t size)
     throw std::bad_alloc{};
 }
 
-void operator delete(void* ptr) noexcept
-{
+void operator delete(void* ptr) noexcept {
     std::free(ptr);
 }
 
-void operator delete(void* ptr, std::size_t) noexcept
-{
+void operator delete(void* ptr, std::size_t) noexcept {
     std::free(ptr);
 }
 
 namespace {
 
-pidpp::PidConfig<double> base_config()
-{
+pidpp::PidConfig<double> base_config() {
     pidpp::PidConfig<double> config{};
     config.output_min = -10.0;
     config.output_max = 10.0;
@@ -52,8 +48,7 @@ pidpp::PidConfig<double> base_config()
 
 } // namespace
 
-TEST_CASE("proportional control returns gain scaled error")
-{
+TEST_CASE("proportional control returns gain scaled error") {
     auto config = base_config();
     config.kp = 2.0;
     pidpp::PidController<double> controller{config};
@@ -65,8 +60,7 @@ TEST_CASE("proportional control returns gain scaled error")
     REQUIRE_THAT(controller.state().proportional_term, WithinAbs(4.0, 1.0e-12));
 }
 
-TEST_CASE("integral term accumulates over valid updates")
-{
+TEST_CASE("integral term accumulates over valid updates") {
     auto config = base_config();
     config.ki = 2.0;
     pidpp::PidController<double> controller{config};
@@ -78,8 +72,7 @@ TEST_CASE("integral term accumulates over valid updates")
     REQUIRE_THAT(controller.state().integral, WithinAbs(1.0, 1.0e-12));
 }
 
-TEST_CASE("derivative on error uses error slope after first sample")
-{
+TEST_CASE("derivative on error uses error slope after first sample") {
     auto config = base_config();
     config.kd = 0.5;
     config.derivative_mode = pidpp::DerivativeMode::OnError;
@@ -92,8 +85,7 @@ TEST_CASE("derivative on error uses error slope after first sample")
     REQUIRE_THAT(controller.state().derivative, WithinAbs(10.0, 1.0e-12));
 }
 
-TEST_CASE("derivative on measurement avoids setpoint kick")
-{
+TEST_CASE("derivative on measurement avoids setpoint kick") {
     auto config = base_config();
     config.kd = 1.0;
     config.derivative_mode = pidpp::DerivativeMode::OnMeasurement;
@@ -106,8 +98,7 @@ TEST_CASE("derivative on measurement avoids setpoint kick")
     REQUIRE_THAT(controller.state().derivative, WithinAbs(0.0, 1.0e-12));
 }
 
-TEST_CASE("output saturation clamps command")
-{
+TEST_CASE("output saturation clamps command") {
     auto config = base_config();
     config.kp = 100.0;
     config.output_min = -2.0;
@@ -120,8 +111,7 @@ TEST_CASE("output saturation clamps command")
     REQUIRE(controller.state().saturated);
 }
 
-TEST_CASE("conditional integration blocks deeper saturation")
-{
+TEST_CASE("conditional integration blocks deeper saturation") {
     auto config = base_config();
     config.ki = 10.0;
     config.output_min = -1.0;
@@ -136,8 +126,7 @@ TEST_CASE("conditional integration blocks deeper saturation")
     REQUIRE_THAT(controller.state().integral, WithinAbs(0.0, 1.0e-12));
 }
 
-TEST_CASE("anti-windup none integrates while output is saturated")
-{
+TEST_CASE("anti-windup none integrates while output is saturated") {
     auto config = base_config();
     config.ki = 10.0;
     config.output_min = -1.0;
@@ -151,8 +140,7 @@ TEST_CASE("anti-windup none integrates while output is saturated")
     REQUIRE_THAT(controller.state().output, WithinAbs(1.0, 1.0e-12));
 }
 
-TEST_CASE("anti-windup clamping keeps integral inside configured limits")
-{
+TEST_CASE("anti-windup clamping keeps integral inside configured limits") {
     auto config = base_config();
     config.ki = 10.0;
     config.integral_min = -0.25;
@@ -167,8 +155,7 @@ TEST_CASE("anti-windup clamping keeps integral inside configured limits")
     REQUIRE_THAT(controller.state().integral, WithinAbs(0.25, 1.0e-12));
 }
 
-TEST_CASE("back calculation reduces integral pressure while saturated")
-{
+TEST_CASE("back calculation reduces integral pressure while saturated") {
     auto config = base_config();
     config.ki = 5.0;
     config.output_min = -1.0;
@@ -182,8 +169,7 @@ TEST_CASE("back calculation reduces integral pressure while saturated")
     REQUIRE(controller.state().integral < 1.0);
 }
 
-TEST_CASE("runtime gain update changes controller response")
-{
+TEST_CASE("runtime gain update changes controller response") {
     auto config = base_config();
     config.kp = 1.0;
     pidpp::PidController<double> controller{config};
@@ -196,8 +182,7 @@ TEST_CASE("runtime gain update changes controller response")
     REQUIRE_THAT(second, WithinAbs(3.0, 1.0e-12));
 }
 
-TEST_CASE("reset clears state")
-{
+TEST_CASE("reset clears state") {
     auto config = base_config();
     config.kp = 1.0;
     config.ki = 1.0;
@@ -210,8 +195,7 @@ TEST_CASE("reset clears state")
     REQUIRE_FALSE(controller.state().initialized);
 }
 
-TEST_CASE("invalid dt returns previous output safely")
-{
+TEST_CASE("invalid dt returns previous output safely") {
     auto config = base_config();
     config.kp = 1.0;
     pidpp::PidController<double> controller{config};
@@ -223,8 +207,7 @@ TEST_CASE("invalid dt returns previous output safely")
     REQUIRE_FALSE(controller.state().last_dt_valid);
 }
 
-TEST_CASE("feedforward can be added without changing PID gains")
-{
+TEST_CASE("feedforward can be added without changing PID gains") {
     auto config = base_config();
     config.feedforward.enabled = true;
     config.feedforward.velocity_gain = 2.0;
@@ -237,8 +220,7 @@ TEST_CASE("feedforward can be added without changing PID gains")
     REQUIRE_THAT(output, WithinAbs(10.0, 1.0e-12));
 }
 
-TEST_CASE("update performs no dynamic allocation")
-{
+TEST_CASE("update performs no dynamic allocation") {
     auto config = base_config();
     config.kp = 1.2;
     config.ki = 0.4;
@@ -257,7 +239,6 @@ TEST_CASE("update performs no dynamic allocation")
     REQUIRE(allocation_count.load(std::memory_order_relaxed) == 0);
 }
 
-TEST_CASE("PID state types are lightweight")
-{
+TEST_CASE("PID state types are lightweight") {
     STATIC_REQUIRE(std::is_trivially_copyable_v<pidpp::PidState<double>>);
 }

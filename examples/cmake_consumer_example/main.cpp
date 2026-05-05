@@ -2,15 +2,9 @@
 
 #include <pidpp/pidpp.hpp>
 
-int main()
-{
+int main() {
     pidpp::PidConfig<double> config{
-        .kp = 1.0,
-        .ki = 0.1,
-        .kd = 0.0,
-        .output_min = -5.0,
-        .output_max = 5.0
-    };
+        .kp = 1.0, .ki = 0.1, .kd = 0.0, .output_min = -5.0, .output_max = 5.0};
 
     if (!config.validate()) {
         return 1;

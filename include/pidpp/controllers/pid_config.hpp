@@ -17,8 +17,7 @@ namespace pidpp {
  * explicit and non-throwing; the controller update path remains noexcept and
  * allocation-free.
  */
-template <std::floating_point T>
-struct PidConfig {
+template <std::floating_point T> struct PidConfig {
     T kp{0};
     T ki{0};
     T kd{0};
@@ -32,8 +31,7 @@ struct PidConfig {
     T back_calculation_gain{1};
     FeedforwardConfig<T> feedforward{};
 
-    [[nodiscard]] Result validate() const noexcept
-    {
+    [[nodiscard]] Result validate() const noexcept {
         if (!is_finite(kp) || !is_finite(ki) || !is_finite(kd)) {
             return Result::error(ErrorCode::InvalidGain, "PID gains must be finite");
         }
@@ -47,15 +45,17 @@ struct PidConfig {
             return Result::error(ErrorCode::InvalidConfiguration, "integral range is invalid");
         }
         if (!is_finite(derivative_filter_tau) || derivative_filter_tau < T{0}) {
-            return Result::error(ErrorCode::InvalidFilterTimeConstant, "derivative filter tau must be non-negative");
+            return Result::error(ErrorCode::InvalidFilterTimeConstant,
+                                 "derivative filter tau must be non-negative");
         }
         if (!is_finite(back_calculation_gain) || back_calculation_gain < T{0}) {
-            return Result::error(ErrorCode::InvalidConfiguration, "back calculation gain must be non-negative");
+            return Result::error(ErrorCode::InvalidConfiguration,
+                                 "back calculation gain must be non-negative");
         }
-        if (!is_finite(feedforward.velocity_gain) ||
-            !is_finite(feedforward.acceleration_gain) ||
+        if (!is_finite(feedforward.velocity_gain) || !is_finite(feedforward.acceleration_gain) ||
             !is_finite(feedforward.static_gain)) {
-            return Result::error(ErrorCode::InvalidConfiguration, "feedforward gains must be finite");
+            return Result::error(ErrorCode::InvalidConfiguration,
+                                 "feedforward gains must be finite");
         }
         return Result::ok();
     }

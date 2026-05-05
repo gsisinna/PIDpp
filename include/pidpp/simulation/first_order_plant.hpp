@@ -9,16 +9,12 @@ namespace pidpp {
 /**
  * Lightweight first-order plant model for examples and offline tests.
  */
-template <std::floating_point T>
-class FirstOrderPlant {
-public:
+template <std::floating_point T> class FirstOrderPlant {
+  public:
     constexpr FirstOrderPlant(T gain, T time_constant, T initial_state = T{0}) noexcept
-        : gain_{gain}, time_constant_{time_constant}, state_{initial_state}
-    {
-    }
+        : gain_{gain}, time_constant_{time_constant}, state_{initial_state} {}
 
-    [[nodiscard]] constexpr T update(T input, T dt) noexcept
-    {
+    [[nodiscard]] constexpr T update(T input, T dt) noexcept {
         if (!is_finite(dt) || dt <= T{0} || time_constant_ <= T{0}) {
             return state_;
         }
@@ -27,17 +23,15 @@ public:
         return state_;
     }
 
-    constexpr void reset(T state = T{0}) noexcept
-    {
+    constexpr void reset(T state = T{0}) noexcept {
         state_ = state;
     }
 
-    [[nodiscard]] constexpr T state() const noexcept
-    {
+    [[nodiscard]] constexpr T state() const noexcept {
         return state_;
     }
 
-private:
+  private:
     T gain_{1};
     T time_constant_{1};
     T state_{0};

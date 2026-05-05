@@ -5,8 +5,7 @@
 
 using Catch::Matchers::WithinAbs;
 
-TEST_CASE("low pass filter initializes from first sample")
-{
+TEST_CASE("low pass filter initializes from first sample") {
     pidpp::LowPassFilter<double> filter{0.1};
 
     const double value = filter.update(5.0, 0.01);
@@ -14,8 +13,7 @@ TEST_CASE("low pass filter initializes from first sample")
     REQUIRE_THAT(value, WithinAbs(5.0, 1.0e-12));
 }
 
-TEST_CASE("low pass filter smooths subsequent samples")
-{
+TEST_CASE("low pass filter smooths subsequent samples") {
     pidpp::LowPassFilter<double> filter{0.1};
 
     static_cast<void>(filter.update(0.0, 0.01));
@@ -24,8 +22,7 @@ TEST_CASE("low pass filter smooths subsequent samples")
     REQUIRE_THAT(value, WithinAbs(5.0, 1.0e-12));
 }
 
-TEST_CASE("moving average uses fixed window")
-{
+TEST_CASE("moving average uses fixed window") {
     pidpp::MovingAverage<double, 3> average;
 
     REQUIRE_THAT(average.update(1.0), WithinAbs(1.0, 1.0e-12));
