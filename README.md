@@ -97,11 +97,18 @@ See `examples/motor_speed_control.cpp` for a velocity loop around a lightweight 
 - `PIDPP_BUILD_TESTS`: build tests.
 - `PIDPP_BUILD_EXAMPLES`: build examples.
 - `PIDPP_BUILD_BENCHMARKS`: build optional Google Benchmark targets.
+- `PIDPP_BUILD_GUI`: build the optional PIDPP Control Lab GUI.
 - `PIDPP_ENABLE_WARNINGS`: enable strict warnings for PIDPP targets.
 - `PIDPP_ENABLE_SANITIZERS`: enable address/undefined sanitizers for PIDPP targets.
 - `PIDPP_BUILD_DOCS`: reserved for documentation targets.
 - `PIDPP_INSTALL`: install targets, headers, CMake config files, and pkg-config metadata.
 - `PIDPP_EMBEDDED_PROFILE`: use embedded-friendly defaults that avoid examples, benchmarks, and docs.
+
+The optional GUI requires native windowing/OpenGL development packages. On Ubuntu/Debian:
+
+```sh
+sudo apt-get install libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+```
 
 ## API Stability Policy
 
