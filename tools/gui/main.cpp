@@ -231,13 +231,77 @@ void draw_config_panel(GuiSettings& settings, SimulationData& data, const ImVec2
         ImGui::SeparatorText("Plant");
         set_full_width();
         ImGui::Combo("##Plant", &settings.plant_model,
+void apply_app_style() {
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 14.0F;
+    style.ChildRounding = 12.0F;
+    style.FrameRounding = 10.0F;
+    style.PopupRounding = 10.0F;
+    style.GrabRounding = 10.0F;
+    style.ScrollbarRounding = 10.0F;
+    style.TabRounding = 10.0F;
+    style.WindowPadding = ImVec2{16.0F, 16.0F};
+    style.FramePadding = ImVec2{12.0F, 8.0F};
+    style.ItemSpacing = ImVec2{10.0F, 10.0F};
+    style.ItemInnerSpacing = ImVec2{8.0F, 6.0F};
+    style.WindowBorderSize = 0.0F;
+    style.ChildBorderSize = 0.0F;
+    style.FrameBorderSize = 0.0F;
+
+    ImVec4* colors = style.Colors;
+    colors[ImGuiCol_WindowBg] = ImVec4{0.07F, 0.09F, 0.11F, 1.0F};
+    colors[ImGuiCol_ChildBg] = ImVec4{0.10F, 0.12F, 0.15F, 1.0F};
+    colors[ImGuiCol_PopupBg] = ImVec4{0.10F, 0.12F, 0.15F, 1.0F};
+    colors[ImGuiCol_Border] = ImVec4{0.18F, 0.22F, 0.26F, 0.65F};
+    colors[ImGuiCol_FrameBg] = ImVec4{0.14F, 0.17F, 0.21F, 1.0F};
+    colors[ImGuiCol_FrameBgHovered] = ImVec4{0.18F, 0.25F, 0.31F, 1.0F};
+    colors[ImGuiCol_FrameBgActive] = ImVec4{0.22F, 0.32F, 0.39F, 1.0F};
+    colors[ImGuiCol_TitleBg] = ImVec4{0.07F, 0.09F, 0.11F, 1.0F};
+    colors[ImGuiCol_TitleBgActive] = ImVec4{0.07F, 0.09F, 0.11F, 1.0F};
+    colors[ImGuiCol_Button] = ImVec4{0.14F, 0.45F, 0.39F, 1.0F};
+    colors[ImGuiCol_ButtonHovered] = ImVec4{0.18F, 0.57F, 0.49F, 1.0F};
+    colors[ImGuiCol_ButtonActive] = ImVec4{0.11F, 0.35F, 0.31F, 1.0F};
+    colors[ImGuiCol_Header] = ImVec4{0.14F, 0.20F, 0.25F, 1.0F};
+    colors[ImGuiCol_HeaderHovered] = ImVec4{0.18F, 0.27F, 0.33F, 1.0F};
+    colors[ImGuiCol_HeaderActive] = ImVec4{0.21F, 0.31F, 0.38F, 1.0F};
+    colors[ImGuiCol_CheckMark] = ImVec4{0.42F, 0.82F, 0.73F, 1.0F};
+    colors[ImGuiCol_SliderGrab] = ImVec4{0.42F, 0.82F, 0.73F, 1.0F};
+    colors[ImGuiCol_SliderGrabActive] = ImVec4{0.58F, 0.90F, 0.83F, 1.0F};
+    colors[ImGuiCol_Separator] = ImVec4{0.21F, 0.26F, 0.31F, 1.0F};
+}
+
+void set_full_width() {
+    ImGui::SetNextItemWidth(-1.0F);
+}
+
+void draw_metric_card(const char* label, const char* value) {
+    ImGui::BeginChild(label, ImVec2{0.0F, 58.0F}, ImGuiChildFlags_Border);
+    ImGui::TextUnformatted(label);
+    ImGui::Spacing();
+    ImGui::TextDisabled("%s", value);
+    ImGui::EndChild();
+}
+
+void draw_config_panel(GuiSettings& settings, SimulationData& data, const ImVec2& size) {
+    if (ImGui::BeginChild("ControlPanel", size, ImGuiChildFlags_Border)) {
+        ImGui::TextUnformatted("Control Lab");
+        ImGui::TextDisabled("Tune the controller, run the plant, inspect the response.");
+        ImGui::Spacing();
+
+        ImGui::SeparatorText("Plant");
+        set_full_width();
+        ImGui::Combo("##Plant", &settings.plant_model,
                      "First-order plant\0DC motor velocity\0Joint position\0");
 
         ImGui::SeparatorText("PID Gains");
         set_full_width();
+        ImGui::SeparatorText("PID Gains");
+        set_full_width();
         ImGui::SliderFloat("Kp", &settings.kp, 0.0F, 100.0F, "%.4f");
         set_full_width();
+        set_full_width();
         ImGui::SliderFloat("Ki", &settings.ki, 0.0F, 50.0F, "%.4f");
+        set_full_width();
         set_full_width();
         ImGui::SliderFloat("Kd", &settings.kd, 0.0F, 20.0F, "%.4f");
         set_full_width();
@@ -245,18 +309,25 @@ void draw_config_panel(GuiSettings& settings, SimulationData& data, const ImVec2
 
         ImGui::SeparatorText("Limits");
         set_full_width();
+        set_full_width();
         ImGui::InputFloat("Output min", &settings.output_min);
+        set_full_width();
         set_full_width();
         ImGui::InputFloat("Output max", &settings.output_max);
         set_full_width();
+        set_full_width();
         ImGui::InputFloat("Integral min", &settings.integral_min);
+        set_full_width();
         set_full_width();
         ImGui::InputFloat("Integral max", &settings.integral_max);
 
         ImGui::SeparatorText("Controller Policy");
         set_full_width();
+        ImGui::SeparatorText("Controller Policy");
+        set_full_width();
         ImGui::Combo("Anti-windup", &settings.anti_windup,
                      "None\0Clamping\0Conditional integration\0Back calculation\0");
+        set_full_width();
         set_full_width();
         ImGui::Combo("Derivative", &settings.derivative_mode, "On error\0On measurement\0");
         set_full_width();
@@ -264,14 +335,20 @@ void draw_config_panel(GuiSettings& settings, SimulationData& data, const ImVec2
 
         ImGui::SeparatorText("Simulation");
         set_full_width();
+        set_full_width();
         ImGui::InputFloat("Setpoint", &settings.setpoint);
+        set_full_width();
         set_full_width();
         ImGui::InputFloat("Initial value", &settings.initial_measurement);
         set_full_width();
+        set_full_width();
         ImGui::SliderFloat("dt", &settings.dt_ms, 0.1F, 20.0F, "%.3f ms");
+        set_full_width();
         set_full_width();
         ImGui::SliderFloat("Duration", &settings.duration_s, 0.25F, 20.0F, "%.2f s");
 
+        ImGui::Spacing();
+        if (ImGui::Button("Run Simulation", ImVec2{-1.0F, 42.0F})) {
         ImGui::Spacing();
         if (ImGui::Button("Run Simulation", ImVec2{-1.0F, 42.0F})) {
             run_simulation(settings, data);
@@ -280,7 +357,11 @@ void draw_config_panel(GuiSettings& settings, SimulationData& data, const ImVec2
         ImGui::Spacing();
         ImGui::TextUnformatted("Status");
         ImGui::TextWrapped("%s", data.status.c_str());
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Status");
+        ImGui::TextWrapped("%s", data.status.c_str());
     }
+    ImGui::EndChild();
     ImGui::EndChild();
 }
 
@@ -307,15 +388,48 @@ void draw_metrics_panel(const GuiSettings& settings, const SimulationData& data,
         std::snprintf(buffer, sizeof(buffer), "%.4f s", data.metrics.rise_time);
         draw_metric_card("Rise time", buffer);
 
+void draw_metrics_panel(const GuiSettings& settings, const SimulationData& data,
+                        const ImVec2& size) {
+    if (ImGui::BeginChild("ResultsPanel", size, ImGuiChildFlags_Border)) {
+        ImGui::TextUnformatted("Results");
+        ImGui::TextDisabled("%s", plant_name(static_cast<PlantModel>(settings.plant_model)));
+        ImGui::Spacing();
+
+        char buffer[64]{};
+        std::snprintf(buffer, sizeof(buffer), "%zu samples", data.time.size());
+        draw_metric_card("Samples", buffer);
+
+        std::snprintf(buffer, sizeof(buffer), "%.4f", data.metrics.final_value);
+        draw_metric_card("Final value", buffer);
+
+        std::snprintf(buffer, sizeof(buffer), "%.4f", data.metrics.peak_value);
+        draw_metric_card("Peak value", buffer);
+
+        std::snprintf(buffer, sizeof(buffer), "%.2f %%", data.metrics.overshoot_percent);
+        draw_metric_card("Overshoot", buffer);
+
+        std::snprintf(buffer, sizeof(buffer), "%.4f s", data.metrics.rise_time);
+        draw_metric_card("Rise time", buffer);
+
         if (data.metrics.settled) {
+            std::snprintf(buffer, sizeof(buffer), "%.4f s", data.metrics.settling_time);
             std::snprintf(buffer, sizeof(buffer), "%.4f s", data.metrics.settling_time);
         } else {
             std::snprintf(buffer, sizeof(buffer), "%s", "not settled");
+            std::snprintf(buffer, sizeof(buffer), "%s", "not settled");
         }
+        draw_metric_card("Settling", buffer);
         draw_metric_card("Settling", buffer);
     }
     ImGui::EndChild();
+    ImGui::EndChild();
 }
+
+void draw_plot_panel(const SimulationData& data, const ImVec2& size) {
+    if (ImGui::BeginChild("PlotsPanel", size, ImGuiChildFlags_Border)) {
+        ImGui::TextUnformatted("Plots");
+        ImGui::TextDisabled("Response and actuator behavior across the simulation horizon.");
+        ImGui::Spacing();
 
 void draw_plot_panel(const SimulationData& data, const ImVec2& size) {
     if (ImGui::BeginChild("PlotsPanel", size, ImGuiChildFlags_Border)) {
@@ -339,6 +453,7 @@ void draw_plot_panel(const SimulationData& data, const ImVec2& size) {
                 ImPlot::EndPlot();
             }
 
+            if (ImPlot::BeginPlot("Controller command", ImVec2{-1.0F, command_height})) {
             if (ImPlot::BeginPlot("Controller command", ImVec2{-1.0F, command_height})) {
                 ImPlot::SetupAxes("Time [s]", "Command");
                 ImPlot::PlotLine("Command", data.time.data(), data.command.data(), count);
@@ -412,6 +527,7 @@ int main() {
 
     ImGui::StyleColorsDark();
     apply_app_style();
+    apply_app_style();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
@@ -426,6 +542,7 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        draw_main_workspace(settings, data);
         draw_main_workspace(settings, data);
 
         ImGui::Render();
