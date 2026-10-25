@@ -368,6 +368,24 @@ TEST_CASE("non finite feedforward input is rejected") {
     REQUIRE_FALSE(controller.state().last_dt_valid);
 }
 
+TEST_CASE("external feedforward is added before saturation") {
+    auto config = base_config();
+    config.kp = 1.0;
+    config.ki = 1.0;
+    config.output_max = 3.0;
+    config.anti_windup = pidpp::AntiWindupStrategy::Clamping;
+    pidpp::PidController<double> controller{config};
+
+    REQUIRE_THAT(controller.update_with_feedforward(1.0, 0.0, 0.1, 1.5), WithinAbs(2.6, 1.0e-12));
+    REQUIRE_THAT(controller.state().feedforward_term, WithinAbs(1.5, 1.0e-12));
+    REQUIRE_THAT(controller.update_with_feedforward(1.0, 0.0, 0.1, 10.0), WithinAbs(3.0, 1.0e-12));
+    REQUIRE(controller.state().saturated);
+    REQUIRE_THAT(
+        controller.update_with_feedforward(1.0, 0.0, 0.1, std::numeric_limits<double>::quiet_NaN()),
+        WithinAbs(3.0, 1.0e-12));
+    REQUIRE_FALSE(controller.state().last_dt_valid);
+}
+
 TEST_CASE("friction feedforward follows the sign of the reference velocity") {
     auto config = base_config();
     config.feedforward.enabled = true;

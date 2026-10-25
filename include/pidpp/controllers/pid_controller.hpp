@@ -63,50 +63,25 @@ template <std::floating_point T> class PidController {
      */
     [[nodiscard]] T update(T setpoint, T measurement, T dt, T feedforward_velocity,
                            T feedforward_acceleration) noexcept {
-        // Real-time contract: invalid inputs preserve the previous command
-        // without throwing, logging, or allocating.
-        if (!validate_time_step(dt) || !is_finite(setpoint) || !is_finite(measurement) ||
-            !is_finite(feedforward_velocity) || !is_finite(feedforward_acceleration)) {
+        if (!is_finite(feedforward_velocity) || !is_finite(feedforward_acceleration)) {
             state_.last_dt_valid = false;
             return state_.output;
         }
+        return step(setpoint, measurement, dt,
+                    feedforward_.calculate(feedforward_velocity, feedforward_acceleration));
+    }
 
-        state_.last_dt_valid = true;
-        const T error = compute_error(setpoint, measurement);
-
-        if (!state_.initialized) {
-            state_.previous_error = error;
-            state_.previous_measurement = measurement;
-            derivative_filter_.reset(T{0});
-            state_.initialized = true;
-        }
-
-        state_.error = error;
-        state_.proportional_term = config_.kp * error;
-        state_.derivative = calculate_derivative(error, measurement, dt);
-        state_.derivative_term = config_.kd * state_.derivative;
-        state_.feedforward_term =
-            feedforward_.calculate(feedforward_velocity, feedforward_acceleration);
-
-        const Bounds bounds = output_bounds(dt);
-
-        const T candidate_integral =
-            clamp(state_.integral + (error * dt), config_.integral_min, config_.integral_max);
-        const T candidate_output = state_.proportional_term + (config_.ki * candidate_integral) +
-                                   state_.derivative_term + state_.feedforward_term;
-        const T saturated_candidate = clamp(candidate_output, bounds.lower, bounds.upper);
-
-        apply_anti_windup(error, dt, candidate_integral, candidate_output, saturated_candidate,
-                          bounds);
-
-        state_.integral_term = config_.ki * state_.integral;
-        state_.unsaturated_output = state_.proportional_term + state_.integral_term +
-                                    state_.derivative_term + state_.feedforward_term;
-        state_.output = clamp(state_.unsaturated_output, bounds.lower, bounds.upper);
-        state_.saturated = state_.output != state_.unsaturated_output;
-        state_.previous_error = error;
-        state_.previous_measurement = measurement;
-        return state_.output;
+    /**
+     * Computes one control step with an externally computed feedforward term.
+     *
+     * `feedforward` is added in output units before saturation, bypassing
+     * FeedforwardConfig. Use it for model-based terms such as gravity
+     * compensation `m*g*l*cos(q)` or inverse-dynamics torques. Anti-windup
+     * accounts for it like any other term.
+     */
+    [[nodiscard]] T update_with_feedforward(T setpoint, T measurement, T dt,
+                                            T feedforward) noexcept {
+        return step(setpoint, measurement, dt, feedforward);
     }
 
     /// Clears all controller state, including the integrator and output memory.
@@ -180,6 +155,52 @@ template <std::floating_point T> class PidController {
         T lower;
         T upper;
     };
+
+    [[nodiscard]] T step(T setpoint, T measurement, T dt, T feedforward) noexcept {
+        // Real-time contract: invalid inputs preserve the previous command
+        // without throwing, logging, or allocating.
+        if (!validate_time_step(dt) || !is_finite(setpoint) || !is_finite(measurement) ||
+            !is_finite(feedforward)) {
+            state_.last_dt_valid = false;
+            return state_.output;
+        }
+
+        state_.last_dt_valid = true;
+        const T error = compute_error(setpoint, measurement);
+
+        if (!state_.initialized) {
+            state_.previous_error = error;
+            state_.previous_measurement = measurement;
+            derivative_filter_.reset(T{0});
+            state_.initialized = true;
+        }
+
+        state_.error = error;
+        state_.proportional_term = config_.kp * error;
+        state_.derivative = calculate_derivative(error, measurement, dt);
+        state_.derivative_term = config_.kd * state_.derivative;
+        state_.feedforward_term = feedforward;
+
+        const Bounds bounds = output_bounds(dt);
+
+        const T candidate_integral =
+            clamp(state_.integral + (error * dt), config_.integral_min, config_.integral_max);
+        const T candidate_output = state_.proportional_term + (config_.ki * candidate_integral) +
+                                   state_.derivative_term + state_.feedforward_term;
+        const T saturated_candidate = clamp(candidate_output, bounds.lower, bounds.upper);
+
+        apply_anti_windup(error, dt, candidate_integral, candidate_output, saturated_candidate,
+                          bounds);
+
+        state_.integral_term = config_.ki * state_.integral;
+        state_.unsaturated_output = state_.proportional_term + state_.integral_term +
+                                    state_.derivative_term + state_.feedforward_term;
+        state_.output = clamp(state_.unsaturated_output, bounds.lower, bounds.upper);
+        state_.saturated = state_.output != state_.unsaturated_output;
+        state_.previous_error = error;
+        state_.previous_measurement = measurement;
+        return state_.output;
+    }
 
     [[nodiscard]] T wrap_delta(T delta) const noexcept {
         if (!config_.continuous_input) {
