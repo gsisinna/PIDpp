@@ -19,9 +19,9 @@
 
 namespace {
 
-constexpr double dt = 0.001;
+constexpr double sample_time = 0.001;
 constexpr double counts_per_rev = 4096.0; // 12-bit absolute encoder
-constexpr double target = std::numbers::pi / 4.0;
+constexpr double target_angle = std::numbers::pi / 4.0;
 
 class Encoder {
   public:
@@ -66,16 +66,16 @@ RunResult run(double derivative_filter_tau, example::CsvLog& csv) {
     double error_sum = 0.0;
     int chatter_samples = 0;
     for (int i = 0; i < 4000; ++i) {
-        joint.update(torque, dt);
-        torque = controller.update(target, encoder.read(joint.position()), dt);
+        joint.update(torque, sample_time);
+        torque = controller.update(target_angle, encoder.read(joint.position()), sample_time);
         if (i >= 2000) { // steady state only
             const double delta = torque - previous_torque;
             chatter_sum += delta * delta;
-            error_sum += std::abs(target - joint.position());
+            error_sum += std::abs(target_angle - joint.position());
             ++chatter_samples;
         }
         previous_torque = torque;
-        csv.row({derivative_filter_tau, i * dt, joint.position(), torque});
+        csv.row({derivative_filter_tau, i * sample_time, joint.position(), torque});
     }
     return {std::sqrt(chatter_sum / chatter_samples), error_sum / chatter_samples};
 }

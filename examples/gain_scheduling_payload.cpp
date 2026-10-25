@@ -17,10 +17,10 @@
 
 namespace {
 
-constexpr double link_mass = 1.5;
-constexpr double link_length = 0.5;
-constexpr double dt = 0.001;
-constexpr double target = 1.0; // rad
+constexpr double scara_link_mass = 1.5;
+constexpr double scara_link_length = 0.5;
+constexpr double sample_time = 0.001;
+constexpr double target_angle = 1.0; // rad
 
 pidpp::PidConfig<double> base_config() {
     return {.output_min = -40.0,
@@ -39,14 +39,14 @@ pidpp::PidGains<double> gains_for_inertia(double inertia) {
 }
 
 double inertia_with_payload(double payload) {
-    return (link_mass * link_length * link_length / 3.0) + (payload * link_length * link_length) +
-           0.02;
+    return (scara_link_mass * scara_link_length * scara_link_length / 3.0) +
+           (payload * scara_link_length * scara_link_length) + 0.02;
 }
 
 template <typename Step>
 pidpp::StepResponseMetrics<double> run(double payload, Step&& step, example::CsvLog& csv,
                                        double run_id) {
-    pidpp::SingleLinkArm<double> joint{link_mass, link_length, 0.2, 0.02};
+    pidpp::SingleLinkArm<double> joint{scara_link_mass, scara_link_length, 0.2, 0.02};
     joint.set_gravity(0.0); // horizontal plane: no gravity torque
     joint.set_payload_mass(payload);
 
@@ -54,12 +54,12 @@ pidpp::StepResponseMetrics<double> run(double payload, Step&& step, example::Csv
     std::array<double, 4000> angle{};
     double torque = 0.0;
     for (std::size_t i = 0; i < time.size(); ++i) {
-        time[i] = static_cast<double>(i) * dt;
-        angle[i] = joint.update(torque, dt);
+        time[i] = static_cast<double>(i) * sample_time;
+        angle[i] = joint.update(torque, sample_time);
         torque = step(joint.angle());
         csv.row({run_id, payload, time[i], angle[i], torque});
     }
-    return pidpp::analyze_step_response<double>(time, angle, target);
+    return pidpp::analyze_step_response<double>(time, angle, target_angle);
 }
 
 } // namespace
@@ -85,14 +85,17 @@ int main(int argc, char** argv) {
         fixed_config.set_gains(gains_for_inertia(inertia_with_payload(0.0)));
         pidpp::PidController<double> fixed{fixed_config};
         const auto fixed_metrics = run(
-            payload, [&](double q) { return fixed.update(target, q, dt); }, csv, 0.0);
+            payload, [&](double q) { return fixed.update(target_angle, q, sample_time); }, csv,
+            0.0);
 
         pidpp::GainScheduledPidController<double, 8> scheduled{base_config()};
         if (!scheduled.set_schedule(schedule)) {
             return 1;
         }
         const auto scheduled_metrics = run(
-            payload, [&](double q) { return scheduled.update(payload, target, q, dt); }, csv, 1.0);
+            payload,
+            [&](double q) { return scheduled.update(payload, target_angle, q, sample_time); }, csv,
+            1.0);
 
         std::printf("  payload %.1f kg\n", payload);
         example::print_value("  fixed gains: overshoot", fixed_metrics.overshoot_percent, "%");

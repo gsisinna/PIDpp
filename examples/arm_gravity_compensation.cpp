@@ -20,11 +20,11 @@
 
 namespace {
 
-constexpr double link_mass = 2.0;      // kg
-constexpr double link_length = 0.6;    // m
-constexpr double joint_damping = 0.8;  // N m s / rad
-constexpr double rotor_inertia = 0.05; // kg m^2 reflected through the gearbox
-constexpr double dt = 0.001;
+constexpr double arm_link_mass = 2.0;      // kg
+constexpr double arm_link_length = 0.6;    // m
+constexpr double joint_damping = 0.8;      // N m s / rad
+constexpr double arm_rotor_inertia = 0.05; // kg m^2 reflected through the gearbox
+constexpr double sample_time = 0.001;
 constexpr double pickup_time = 4.0;
 
 struct RunResult {
@@ -49,10 +49,11 @@ RunResult run(bool gravity_feedforward, example::CsvLog& csv) {
                                     .derivative_filter_tau = 0.005};
     pidpp::PidController<double> controller{config};
 
-    pidpp::SingleLinkArm<double> arm{link_mass, link_length, joint_damping, rotor_inertia};
+    pidpp::SingleLinkArm<double> arm{arm_link_mass, arm_link_length, joint_damping,
+                                     arm_rotor_inertia};
     arm.reset(-std::numbers::pi / 2.0);
     // The controller's model knows the link but not the payload, and is 5 % off.
-    const pidpp::SingleLinkArm<double> model{link_mass * 1.05, link_length, 0.0};
+    const pidpp::SingleLinkArm<double> model{arm_link_mass * 1.05, arm_link_length, 0.0};
 
     pidpp::TrapezoidalProfile<double> profile;
     static_cast<void>(profile.plan(-std::numbers::pi / 2.0, pidpp::deg_to_rad(30.0),
@@ -65,14 +66,14 @@ RunResult run(bool gravity_feedforward, example::CsvLog& csv) {
     double max_move_error = 0.0;
 
     for (int i = 0; i < 8000; ++i) {
-        const double t = static_cast<double>(i) * dt;
+        const double t = static_cast<double>(i) * sample_time;
         if (t >= pickup_time) {
             arm.set_payload_mass(0.5);
         }
-        arm.update(torque, dt);
+        arm.update(torque, sample_time);
         const double target = profile.sample(t).position;
         const double ff = gravity_feedforward ? model.gravity_torque(arm.angle()) : 0.0;
-        torque = controller.update_with_feedforward(target, arm.angle(), dt, ff);
+        torque = controller.update_with_feedforward(target, arm.angle(), sample_time, ff);
 
         if (t <= move_window) {
             reference.push_back(target);

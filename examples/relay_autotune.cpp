@@ -20,14 +20,14 @@
 
 namespace {
 
-constexpr double dt = 0.0002; // 5 kHz
+constexpr double sample_time = 0.0002; // 5 kHz
 constexpr double operating_voltage = 6.0;
 
 struct SpeedSensor {
     pidpp::LowPassFilter<double> filter{0.005};
 
     double read(double true_speed) {
-        return filter.update(true_speed, dt);
+        return filter.update(true_speed, sample_time);
     }
 };
 
@@ -41,7 +41,7 @@ int main(int /*argc*/, char** /*argv*/) {
 
     // Spin up to the operating point first, as a real tuner would.
     for (int i = 0; i < 50000; ++i) {
-        motor.update(operating_voltage, 0.0, dt);
+        motor.update(operating_voltage, 0.0, sample_time);
         static_cast<void>(sensor.read(motor.angular_velocity()));
     }
 
@@ -56,8 +56,8 @@ int main(int /*argc*/, char** /*argv*/) {
 
     double voltage = operating_voltage;
     for (int i = 0; i < 200000 && !tuner.complete() && !tuner.result().timed_out; ++i) {
-        motor.update(voltage, 0.0, dt);
-        voltage = tuner.update(operating_speed, sensor.read(motor.angular_velocity()), dt);
+        motor.update(voltage, 0.0, sample_time);
+        voltage = tuner.update(operating_speed, sensor.read(motor.angular_velocity()), sample_time);
     }
 
     example::title("Relay experiment");
@@ -105,10 +105,10 @@ int main(int /*argc*/, char** /*argv*/) {
     std::vector<double> speed;
     voltage = 0.0;
     for (int i = 0; i < 25000; ++i) {
-        motor.update(voltage, 0.0, dt);
+        motor.update(voltage, 0.0, sample_time);
         const double measured = sensor.read(motor.angular_velocity());
-        voltage = controller.update(target, measured, dt);
-        time.push_back(static_cast<double>(i) * dt);
+        voltage = controller.update(target, measured, sample_time);
+        time.push_back(static_cast<double>(i) * sample_time);
         speed.push_back(motor.angular_velocity());
     }
     const auto metrics = pidpp::analyze_step_response<double>(time, speed, target);

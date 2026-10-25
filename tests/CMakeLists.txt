@@ -6,6 +6,11 @@ FetchContent_Declare(
     GIT_TAG v3.6.0
     GIT_SHALLOW TRUE
 )
+# Build Catch2 with the same language standard as the tests. Otherwise
+# compilers that default to C++14 (MSVC, AppleClang) compile the Catch2
+# library without std::string_view support and linking the tests fails.
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 FetchContent_MakeAvailable(Catch2)
 
 add_executable(pidpp_tests

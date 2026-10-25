@@ -15,9 +15,9 @@
 
 namespace {
 
-constexpr double dt = 0.001;
+constexpr double sample_time = 0.001;
 constexpr std::size_t samples = 6000;
-constexpr double target = 1.0;
+constexpr double target_value = 1.0;
 
 pidpp::StepResponseMetrics<double> simulate(const pidpp::PidConfig<double>& config) {
     pidpp::PidController<double> controller{config};
@@ -28,11 +28,11 @@ pidpp::StepResponseMetrics<double> simulate(const pidpp::PidConfig<double>& conf
     std::array<double, samples> output{};
     double command = 0.0;
     for (std::size_t i = 0; i < samples; ++i) {
-        time[i] = static_cast<double>(i) * dt;
-        output[i] = process.update(actuator.update(command, dt), dt);
-        command = controller.update(target, output[i], dt);
+        time[i] = static_cast<double>(i) * sample_time;
+        output[i] = process.update(actuator.update(command, sample_time), sample_time);
+        command = controller.update(target_value, output[i], sample_time);
     }
-    return pidpp::analyze_step_response<double>(time, output, target);
+    return pidpp::analyze_step_response<double>(time, output, target_value);
 }
 
 void print(const char* name, const pidpp::StepResponseMetrics<double>& m) {
@@ -69,7 +69,7 @@ int main() {
     print("PI", pi_metrics);
     print("PID", pid_metrics);
 
-    bool ok = example::check(std::abs(p_metrics.steady_state_error - (target / 5.0)) < 0.01,
+    bool ok = example::check(std::abs(p_metrics.steady_state_error - (target_value / 5.0)) < 0.01,
                              "P-only leaves the expected steady-state error 1/(1+Kp)");
     ok &= example::check(std::abs(pi_metrics.steady_state_error) < 1.0e-3,
                          "integral action removes steady-state error");

@@ -21,7 +21,7 @@
 
 namespace {
 
-constexpr double dt = 0.01; // 100 Hz navigation loop
+constexpr double sample_time = 0.01; // 100 Hz navigation loop
 
 pidpp::PidConfig<double> heading_config() {
     return {.kp = 4.0,
@@ -53,10 +53,10 @@ int main(int argc, char** argv) {
         double w_cmd = 0.0;
         double min_abs_heading = std::numbers::pi;
         for (int i = 0; i < 300; ++i) {
-            const auto& pose = robot.update(0.0, w_cmd, dt);
-            w_cmd = heading.update(target, pose.heading, dt);
+            const auto& pose = robot.update(0.0, w_cmd, sample_time);
+            w_cmd = heading.update(target, pose.heading, sample_time);
             min_abs_heading = std::min(min_abs_heading, std::abs(pose.heading));
-            csv.row({1.0, i * dt, pose.x, pose.y, pose.heading, 0.0, w_cmd});
+            csv.row({1.0, i * sample_time, pose.x, pose.y, pose.heading, 0.0, w_cmd});
         }
 
         const double final_error = pidpp::angle_difference(target, robot.pose().heading);
@@ -88,8 +88,8 @@ int main(int argc, char** argv) {
         double v_cmd = 0.0;
         double w_cmd = 0.0;
         double t = 0.0;
-        for (int i = 0; i < 6000 && reached < waypoints.size(); ++i, t += dt) {
-            const auto& pose = robot.update(v_cmd, w_cmd, dt);
+        for (int i = 0; i < 6000 && reached < waypoints.size(); ++i, t += sample_time) {
+            const auto& pose = robot.update(v_cmd, w_cmd, sample_time);
             const auto& goal = waypoints[reached];
             const double dx = goal[0] - pose.x;
             const double dy = goal[1] - pose.y;
@@ -100,12 +100,13 @@ int main(int argc, char** argv) {
             }
 
             const double bearing = std::atan2(dy, dx);
-            w_cmd = heading.update(bearing, pose.heading, dt);
+            w_cmd = heading.update(bearing, pose.heading, sample_time);
             const double heading_error = std::abs(pidpp::angle_difference(bearing, pose.heading));
             // Scale speed down as the heading error grows; stop above 60 deg.
             const double alignment =
                 std::max(0.0, std::cos(std::min(heading_error * 1.5, std::numbers::pi / 2.0)));
-            v_cmd = speed_limiter.update(distance.update(range, 0.0, dt) * alignment, dt);
+            v_cmd = speed_limiter.update(distance.update(range, 0.0, sample_time) * alignment,
+                                         sample_time);
             csv.row({2.0, t, pose.x, pose.y, pose.heading, v_cmd, w_cmd});
         }
 

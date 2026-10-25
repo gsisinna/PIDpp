@@ -2,7 +2,7 @@
 //
 // The same PID gains follow a trapezoidal joint trajectory twice: once with
 // feedback only, once with velocity/acceleration feedforward derived from the
-// joint model (kV = viscous friction, kA = inertia). Feedback alone always
+// joint model (kV = viscous joint_friction, kA = joint_inertia). Feedback alone always
 // lags a moving reference; feedforward supplies the expected torque up front
 // and leaves the PID to reject the residual error.
 //
@@ -18,9 +18,9 @@
 
 namespace {
 
-constexpr double inertia = 1.2;  // kg m^2
-constexpr double friction = 1.4; // N m s / rad
-constexpr double dt = 0.001;
+constexpr double joint_inertia = 1.2;  // kg m^2
+constexpr double joint_friction = 1.4; // N m s / rad
+constexpr double sample_time = 0.001;
 
 struct RunResult {
     pidpp::TrackingMetrics<double> metrics;
@@ -31,18 +31,18 @@ RunResult run(const pidpp::PidConfig<double>& config,
               const pidpp::TrapezoidalProfile<double>& profile, example::CsvLog& csv,
               double run_id) {
     pidpp::PidController<double> controller{config};
-    pidpp::MassSpringDamper<double> joint{inertia, friction, 0.0};
+    pidpp::MassSpringDamper<double> joint{joint_inertia, joint_friction, 0.0};
     std::vector<double> reference;
     std::vector<double> measured;
 
     double torque = 0.0;
-    const auto steps = static_cast<int>((profile.duration() + 1.5) / dt);
+    const auto steps = static_cast<int>((profile.duration() + 1.5) / sample_time);
     for (int i = 0; i < steps; ++i) {
-        const double t = static_cast<double>(i) * dt;
-        joint.update(torque, dt);
+        const double t = static_cast<double>(i) * sample_time;
+        joint.update(torque, sample_time);
         const auto ref = profile.sample(t);
-        torque =
-            controller.update(ref.position, joint.position(), dt, ref.velocity, ref.acceleration);
+        torque = controller.update(ref.position, joint.position(), sample_time, ref.velocity,
+                                   ref.acceleration);
         reference.push_back(ref.position);
         measured.push_back(joint.position());
         csv.row({run_id, t, ref.position, joint.position(), torque});
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
 
     auto with_ff = config;
     with_ff.feedforward = {
-        .velocity_gain = friction, .acceleration_gain = inertia, .enabled = true};
+        .velocity_gain = joint_friction, .acceleration_gain = joint_inertia, .enabled = true};
     const RunResult feedforward = run(with_ff, profile, csv, 1.0);
 
     example::title("Joint trajectory tracking: feedback vs feedback + feedforward");
