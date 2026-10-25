@@ -21,6 +21,7 @@ FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
     GIT_TAG 3.4
+    GIT_SHALLOW TRUE
 )
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -37,19 +38,20 @@ FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
     GIT_TAG v1.90.9
+    GIT_SHALLOW TRUE
 )
 
 FetchContent_Declare(
     implot
     GIT_REPOSITORY https://github.com/epezent/implot.git
     GIT_TAG v0.16
+    GIT_SHALLOW TRUE
 )
 
 FetchContent_MakeAvailable(imgui implot)
 
 add_library(pidpp_gui_imgui STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
-    ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
@@ -68,8 +70,21 @@ target_include_directories(pidpp_gui_imgui
 )
 target_link_libraries(pidpp_gui_imgui PUBLIC glfw OpenGL::GL)
 
-add_executable(pidpp_control_lab main.cpp)
+add_executable(pidpp_control_lab main.cpp lab_simulation.cpp lab_simulation.hpp)
 target_link_libraries(pidpp_control_lab PRIVATE pidpp::pidpp pidpp_gui_imgui)
+
+if(PIDPP_ENABLE_WARNINGS)
+    if(MSVC)
+        target_compile_options(pidpp_control_lab PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(pidpp_control_lab PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endif()
+
+# Headless smoke test: runs every plant preset and the autotuner, no window.
+if(PIDPP_BUILD_TESTS)
+    add_test(NAME control_lab.headless COMMAND pidpp_control_lab --headless)
+endif()
 
 if(PIDPP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(pidpp_gui_imgui PRIVATE ${PIDPP_SANITIZER_COMPILE_OPTIONS})

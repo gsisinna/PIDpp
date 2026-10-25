@@ -1,9 +1,15 @@
-#include <array>
+// PID++ Control Lab: interactive tuning and visualization tool.
+//
+// Usage:
+//   pidpp_control_lab              open the GUI
+//   pidpp_control_lab --headless   run every plant preset without a window
+//                                  (used as a CI smoke test)
+
+#include <algorithm>
 #include <cmath>
-#include <cstddef>
 #include <cstdio>
 #include <string>
-#include <vector>
+#include <string_view>
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
@@ -11,178 +17,36 @@
 #include <imgui_impl_opengl3.h>
 #include <implot.h>
 
-#include <pidpp/pidpp.hpp>
+#include "lab_simulation.hpp"
 
 namespace {
 
-enum class PlantModel {
-    FirstOrder,
-    DcMotor,
-    JointPosition,
+struct AppState {
+    lab::Settings settings{lab::defaults_for(lab::PlantModel::FirstOrder)};
+    lab::Trace trace{};
+    std::string autotune_message{};
+    bool auto_run{true};
 };
 
-struct GuiSettings {
-    float kp{1.2F};
-    float ki{0.4F};
-    float kd{0.05F};
-    float output_min{-12.0F};
-    float output_max{12.0F};
-    float integral_min{-10.0F};
-    float integral_max{10.0F};
-    float derivative_filter_tau{0.02F};
-    float back_calculation_gain{1.0F};
-    float setpoint{10.0F};
-    float initial_measurement{0.0F};
-    float dt_ms{1.0F};
-    float duration_s{4.0F};
-    int anti_windup{static_cast<int>(pidpp::AntiWindupStrategy::ConditionalIntegration)};
-    int derivative_mode{static_cast<int>(pidpp::DerivativeMode::OnMeasurement)};
-    int plant_model{static_cast<int>(PlantModel::FirstOrder)};
-};
-
-struct SimulationData {
-    std::vector<double> time{};
-    std::vector<double> setpoint{};
-    std::vector<double> measurement{};
-    std::vector<double> command{};
-    pidpp::StepResponseMetrics<double> metrics{};
-    std::string status{"Ready"};
-};
-
-pidpp::PidConfig<double> make_config(const GuiSettings& settings) {
-    pidpp::PidConfig<double> config{};
-    config.kp = static_cast<double>(settings.kp);
-    config.ki = static_cast<double>(settings.ki);
-    config.kd = static_cast<double>(settings.kd);
-    config.output_min = static_cast<double>(settings.output_min);
-    config.output_max = static_cast<double>(settings.output_max);
-    config.integral_min = static_cast<double>(settings.integral_min);
-    config.integral_max = static_cast<double>(settings.integral_max);
-    config.anti_windup = static_cast<pidpp::AntiWindupStrategy>(settings.anti_windup);
-    config.derivative_mode = static_cast<pidpp::DerivativeMode>(settings.derivative_mode);
-    config.derivative_filter_tau = static_cast<double>(settings.derivative_filter_tau);
-    config.back_calculation_gain = static_cast<double>(settings.back_calculation_gain);
-    return config;
-}
-
-const char* plant_name(PlantModel model) {
-    switch (model) {
-    case PlantModel::FirstOrder:
-        return "First-order plant";
-    case PlantModel::DcMotor:
-        return "DC motor velocity";
-    case PlantModel::JointPosition:
-        return "Joint position";
-    }
-    return "Unknown";
-}
-
-void reserve_samples(SimulationData& data, std::size_t count) {
-    data.time.clear();
-    data.setpoint.clear();
-    data.measurement.clear();
-    data.command.clear();
-    data.time.reserve(count);
-    data.setpoint.reserve(count);
-    data.measurement.reserve(count);
-    data.command.reserve(count);
-}
-
-void push_sample(SimulationData& data, double t, double setpoint, double measurement,
-                 double command) {
-    data.time.push_back(t);
-    data.setpoint.push_back(setpoint);
-    data.measurement.push_back(measurement);
-    data.command.push_back(command);
-}
-
-void run_first_order(const GuiSettings& settings, pidpp::PidController<double>& controller,
-                     SimulationData& data, double dt, int steps) {
-    pidpp::FirstOrderPlant<double> plant{1.0, 0.35,
-                                         static_cast<double>(settings.initial_measurement)};
-    double command = 0.0;
-    for (int i = 0; i < steps; ++i) {
-        const double t = static_cast<double>(i) * dt;
-        const double measurement = plant.update(command, dt);
-        command = controller.update(static_cast<double>(settings.setpoint), measurement, dt);
-        push_sample(data, t, static_cast<double>(settings.setpoint), measurement, command);
-    }
-}
-
-void run_motor(const GuiSettings& settings, pidpp::PidController<double>& controller,
-               SimulationData& data, double dt, int steps) {
-    pidpp::DcMotor<double> motor{2.0, 0.01, 0.1, 0.1, 0.01, 0.001};
-    double voltage = 0.0;
-    for (int i = 0; i < steps; ++i) {
-        const double t = static_cast<double>(i) * dt;
-        const double speed = motor.update(voltage, 0.0, dt);
-        voltage = controller.update(static_cast<double>(settings.setpoint), speed, dt);
-        push_sample(data, t, static_cast<double>(settings.setpoint), speed, voltage);
-    }
-}
-
-void run_joint(const GuiSettings& settings, pidpp::PidController<double>& controller,
-               SimulationData& data, double dt, int steps) {
-    pidpp::MassSpringDamper<double> joint{1.2, 1.4, 0.0};
-    joint.reset(static_cast<double>(settings.initial_measurement), 0.0);
-    double torque = 0.0;
-    for (int i = 0; i < steps; ++i) {
-        const double t = static_cast<double>(i) * dt;
-        const double position = joint.update(torque, dt);
-        torque = controller.update(static_cast<double>(settings.setpoint), position, dt);
-        push_sample(data, t, static_cast<double>(settings.setpoint), position, torque);
-    }
-}
-
-void run_simulation(const GuiSettings& settings, SimulationData& data) {
-    const auto config = make_config(settings);
-    const auto validation = config.validate();
-    if (!validation) {
-        data.status = std::string{"Invalid configuration: "} + validation.message();
-        return;
-    }
-
-    const double dt = static_cast<double>(settings.dt_ms) / 1000.0;
-    if (!pidpp::validate_time_step(dt)) {
-        data.status = "Invalid simulation step";
-        return;
-    }
-
-    const int steps =
-        static_cast<int>(std::max(1.0, std::floor(static_cast<double>(settings.duration_s) / dt)));
-    reserve_samples(data, static_cast<std::size_t>(steps));
-
-    pidpp::PidController<double> controller{config};
-    const auto model = static_cast<PlantModel>(settings.plant_model);
-    switch (model) {
-    case PlantModel::FirstOrder:
-        run_first_order(settings, controller, data, dt, steps);
-        break;
-    case PlantModel::DcMotor:
-        run_motor(settings, controller, data, dt, steps);
-        break;
-    case PlantModel::JointPosition:
-        run_joint(settings, controller, data, dt, steps);
-        break;
-    }
-
-    data.metrics = pidpp::analyze_step_response<double>(data.time, data.measurement,
-                                                        static_cast<double>(settings.setpoint));
-    data.status = "Simulation complete";
-}
+constexpr const char* anti_windup_items =
+    "None\0Clamping (dynamic)\0Conditional integration\0Back calculation\0";
+constexpr const char* derivative_items = "On error\0On measurement\0";
+constexpr const char* tuning_rule_items =
+    "Ziegler-Nichols P\0Ziegler-Nichols PI\0Ziegler-Nichols PID\0Tyreus-Luyben PI\0"
+    "Tyreus-Luyben PID\0Pessen integral\0Some overshoot PID\0No overshoot PID\0";
 
 void apply_app_style() {
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 14.0F;
     style.ChildRounding = 12.0F;
-    style.FrameRounding = 10.0F;
-    style.PopupRounding = 10.0F;
-    style.GrabRounding = 10.0F;
-    style.ScrollbarRounding = 10.0F;
-    style.TabRounding = 10.0F;
+    style.FrameRounding = 8.0F;
+    style.PopupRounding = 8.0F;
+    style.GrabRounding = 8.0F;
+    style.ScrollbarRounding = 8.0F;
+    style.TabRounding = 8.0F;
     style.WindowPadding = ImVec2{16.0F, 16.0F};
-    style.FramePadding = ImVec2{12.0F, 8.0F};
-    style.ItemSpacing = ImVec2{10.0F, 10.0F};
+    style.FramePadding = ImVec2{10.0F, 6.0F};
+    style.ItemSpacing = ImVec2{10.0F, 8.0F};
     style.ItemInnerSpacing = ImVec2{8.0F, 6.0F};
     style.WindowBorderSize = 0.0F;
     style.ChildBorderSize = 0.0F;
@@ -210,265 +74,201 @@ void apply_app_style() {
     colors[ImGuiCol_Separator] = ImVec4{0.21F, 0.26F, 0.31F, 1.0F};
 }
 
-void set_full_width() {
+/// Draws a full-width widget and reports whether its value changed.
+template <typename Widget> bool full_width(Widget&& widget) {
     ImGui::SetNextItemWidth(-1.0F);
+    return widget();
 }
 
-void draw_metric_card(const char* label, const char* value) {
-    ImGui::BeginChild(label, ImVec2{0.0F, 58.0F}, ImGuiChildFlags_Border);
+bool labeled_slider(const char* label, float* value, float min, float max, const char* format) {
     ImGui::TextUnformatted(label);
-    ImGui::Spacing();
-    ImGui::TextDisabled("%s", value);
-    ImGui::EndChild();
+    return full_width([&] {
+        return ImGui::SliderFloat((std::string{"##"} + label).c_str(), value, min, max, format,
+                                  ImGuiSliderFlags_AlwaysClamp);
+    });
 }
 
-void draw_config_panel(GuiSettings& settings, SimulationData& data, const ImVec2& size) {
+bool labeled_input(const char* label, float* value) {
+    ImGui::TextUnformatted(label);
+    return full_width([&] {
+        return ImGui::InputFloat((std::string{"##"} + label).c_str(), value, 0.0F, 0.0F, "%.4f");
+    });
+}
+
+bool labeled_combo(const char* label, int* value, const char* items) {
+    ImGui::TextUnformatted(label);
+    return full_width(
+        [&] { return ImGui::Combo((std::string{"##"} + label).c_str(), value, items); });
+}
+
+void draw_config_panel(AppState& app, const ImVec2& size) {
+    lab::Settings& s = app.settings;
+    bool changed = false;
+
     if (ImGui::BeginChild("ControlPanel", size, ImGuiChildFlags_Border)) {
-        ImGui::TextUnformatted("Control Lab");
+        ImGui::TextUnformatted("PID++ Control Lab");
         ImGui::TextDisabled("Tune the controller, run the plant, inspect the response.");
-        ImGui::Spacing();
 
         ImGui::SeparatorText("Plant");
-        set_full_width();
-        ImGui::Combo("##Plant", &settings.plant_model,
-void apply_app_style() {
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 14.0F;
-    style.ChildRounding = 12.0F;
-    style.FrameRounding = 10.0F;
-    style.PopupRounding = 10.0F;
-    style.GrabRounding = 10.0F;
-    style.ScrollbarRounding = 10.0F;
-    style.TabRounding = 10.0F;
-    style.WindowPadding = ImVec2{16.0F, 16.0F};
-    style.FramePadding = ImVec2{12.0F, 8.0F};
-    style.ItemSpacing = ImVec2{10.0F, 10.0F};
-    style.ItemInnerSpacing = ImVec2{8.0F, 6.0F};
-    style.WindowBorderSize = 0.0F;
-    style.ChildBorderSize = 0.0F;
-    style.FrameBorderSize = 0.0F;
+        int plant = s.plant;
+        if (labeled_combo("Model", &plant, lab::plant_combo_items()) && plant != s.plant) {
+            s = lab::defaults_for(static_cast<lab::PlantModel>(plant));
+            app.autotune_message.clear();
+            changed = true;
+        }
+        changed |=
+            ImGui::Checkbox("Model feedforward (gravity / hover / kV)", &s.model_feedforward);
 
-    ImVec4* colors = style.Colors;
-    colors[ImGuiCol_WindowBg] = ImVec4{0.07F, 0.09F, 0.11F, 1.0F};
-    colors[ImGuiCol_ChildBg] = ImVec4{0.10F, 0.12F, 0.15F, 1.0F};
-    colors[ImGuiCol_PopupBg] = ImVec4{0.10F, 0.12F, 0.15F, 1.0F};
-    colors[ImGuiCol_Border] = ImVec4{0.18F, 0.22F, 0.26F, 0.65F};
-    colors[ImGuiCol_FrameBg] = ImVec4{0.14F, 0.17F, 0.21F, 1.0F};
-    colors[ImGuiCol_FrameBgHovered] = ImVec4{0.18F, 0.25F, 0.31F, 1.0F};
-    colors[ImGuiCol_FrameBgActive] = ImVec4{0.22F, 0.32F, 0.39F, 1.0F};
-    colors[ImGuiCol_TitleBg] = ImVec4{0.07F, 0.09F, 0.11F, 1.0F};
-    colors[ImGuiCol_TitleBgActive] = ImVec4{0.07F, 0.09F, 0.11F, 1.0F};
-    colors[ImGuiCol_Button] = ImVec4{0.14F, 0.45F, 0.39F, 1.0F};
-    colors[ImGuiCol_ButtonHovered] = ImVec4{0.18F, 0.57F, 0.49F, 1.0F};
-    colors[ImGuiCol_ButtonActive] = ImVec4{0.11F, 0.35F, 0.31F, 1.0F};
-    colors[ImGuiCol_Header] = ImVec4{0.14F, 0.20F, 0.25F, 1.0F};
-    colors[ImGuiCol_HeaderHovered] = ImVec4{0.18F, 0.27F, 0.33F, 1.0F};
-    colors[ImGuiCol_HeaderActive] = ImVec4{0.21F, 0.31F, 0.38F, 1.0F};
-    colors[ImGuiCol_CheckMark] = ImVec4{0.42F, 0.82F, 0.73F, 1.0F};
-    colors[ImGuiCol_SliderGrab] = ImVec4{0.42F, 0.82F, 0.73F, 1.0F};
-    colors[ImGuiCol_SliderGrabActive] = ImVec4{0.58F, 0.90F, 0.83F, 1.0F};
-    colors[ImGuiCol_Separator] = ImVec4{0.21F, 0.26F, 0.31F, 1.0F};
-}
+        ImGui::SeparatorText("PID gains");
+        changed |= labeled_slider("Kp", &s.kp, 0.0F, 200.0F, "%.4f");
+        changed |= labeled_slider("Ki", &s.ki, 0.0F, 200.0F, "%.4f");
+        changed |= labeled_slider("Kd", &s.kd, 0.0F, 30.0F, "%.4f");
+        changed |=
+            labeled_slider("Derivative filter tau", &s.derivative_filter_tau, 0.0F, 0.5F, "%.4f s");
 
-void set_full_width() {
-    ImGui::SetNextItemWidth(-1.0F);
-}
-
-void draw_metric_card(const char* label, const char* value) {
-    ImGui::BeginChild(label, ImVec2{0.0F, 58.0F}, ImGuiChildFlags_Border);
-    ImGui::TextUnformatted(label);
-    ImGui::Spacing();
-    ImGui::TextDisabled("%s", value);
-    ImGui::EndChild();
-}
-
-void draw_config_panel(GuiSettings& settings, SimulationData& data, const ImVec2& size) {
-    if (ImGui::BeginChild("ControlPanel", size, ImGuiChildFlags_Border)) {
-        ImGui::TextUnformatted("Control Lab");
-        ImGui::TextDisabled("Tune the controller, run the plant, inspect the response.");
-        ImGui::Spacing();
-
-        ImGui::SeparatorText("Plant");
-        set_full_width();
-        ImGui::Combo("##Plant", &settings.plant_model,
-                     "First-order plant\0DC motor velocity\0Joint position\0");
-
-        ImGui::SeparatorText("PID Gains");
-        set_full_width();
-        ImGui::SeparatorText("PID Gains");
-        set_full_width();
-        ImGui::SliderFloat("Kp", &settings.kp, 0.0F, 100.0F, "%.4f");
-        set_full_width();
-        set_full_width();
-        ImGui::SliderFloat("Ki", &settings.ki, 0.0F, 50.0F, "%.4f");
-        set_full_width();
-        set_full_width();
-        ImGui::SliderFloat("Kd", &settings.kd, 0.0F, 20.0F, "%.4f");
-        set_full_width();
-        ImGui::SliderFloat("Derivative tau", &settings.derivative_filter_tau, 0.0F, 1.0F, "%.4f s");
+        ImGui::SeparatorText("Autotune (relay experiment)");
+        full_width([&] { return ImGui::Combo("##Rule", &s.tuning_rule, tuning_rule_items); });
+        if (ImGui::Button("Autotune gains", ImVec2{-1.0F, 0.0F})) {
+            const auto outcome = lab::autotune(s);
+            char buffer[160]{};
+            if (outcome.success) {
+                s.kp = static_cast<float>(outcome.gains.kp);
+                s.ki = static_cast<float>(outcome.gains.ki);
+                s.kd = static_cast<float>(outcome.gains.kd);
+                std::snprintf(buffer, sizeof(buffer), "Ku = %.4g, Tu = %.4g s",
+                              outcome.result.ultimate_gain, outcome.result.ultimate_period);
+                app.autotune_message = buffer;
+                changed = true;
+            } else {
+                app.autotune_message = outcome.message;
+            }
+        }
+        if (!app.autotune_message.empty()) {
+            ImGui::TextWrapped("%s", app.autotune_message.c_str());
+        }
 
         ImGui::SeparatorText("Limits");
-        set_full_width();
-        set_full_width();
-        ImGui::InputFloat("Output min", &settings.output_min);
-        set_full_width();
-        set_full_width();
-        ImGui::InputFloat("Output max", &settings.output_max);
-        set_full_width();
-        set_full_width();
-        ImGui::InputFloat("Integral min", &settings.integral_min);
-        set_full_width();
-        set_full_width();
-        ImGui::InputFloat("Integral max", &settings.integral_max);
+        changed |= labeled_input("Output min", &s.output_min);
+        changed |= labeled_input("Output max", &s.output_max);
+        changed |= labeled_input("Integral min (error*s)", &s.integral_min);
+        changed |= labeled_input("Integral max (error*s)", &s.integral_max);
+        changed |= labeled_input("Output rate limit (units/s, 0 = off)", &s.output_rate_limit);
+        changed |= labeled_input("Error deadband", &s.error_deadband);
 
-        ImGui::SeparatorText("Controller Policy");
-        set_full_width();
-        ImGui::SeparatorText("Controller Policy");
-        set_full_width();
-        ImGui::Combo("Anti-windup", &settings.anti_windup,
-                     "None\0Clamping\0Conditional integration\0Back calculation\0");
-        set_full_width();
-        set_full_width();
-        ImGui::Combo("Derivative", &settings.derivative_mode, "On error\0On measurement\0");
-        set_full_width();
-        ImGui::SliderFloat("Back calc gain", &settings.back_calculation_gain, 0.0F, 10.0F, "%.4f");
+        ImGui::SeparatorText("Controller policy");
+        changed |= labeled_combo("Anti-windup", &s.anti_windup, anti_windup_items);
+        changed |= labeled_combo("Derivative", &s.derivative_mode, derivative_items);
+        changed |=
+            labeled_slider("Back-calculation gain", &s.back_calculation_gain, 0.0F, 10.0F, "%.3f");
 
-        ImGui::SeparatorText("Simulation");
-        set_full_width();
-        set_full_width();
-        ImGui::InputFloat("Setpoint", &settings.setpoint);
-        set_full_width();
-        set_full_width();
-        ImGui::InputFloat("Initial value", &settings.initial_measurement);
-        set_full_width();
-        set_full_width();
-        ImGui::SliderFloat("dt", &settings.dt_ms, 0.1F, 20.0F, "%.3f ms");
-        set_full_width();
-        set_full_width();
-        ImGui::SliderFloat("Duration", &settings.duration_s, 0.25F, 20.0F, "%.2f s");
+        ImGui::SeparatorText("Scenario");
+        changed |= labeled_input("Setpoint", &s.setpoint);
+        changed |= labeled_input("Initial value", &s.initial_measurement);
+        changed |= labeled_slider("Time step", &s.dt_ms, 0.1F, 20.0F, "%.2f ms");
+        changed |= labeled_slider("Duration", &s.duration_s, 0.25F, 60.0F, "%.2f s");
+        changed |= labeled_slider("Measurement noise", &s.noise_amplitude, 0.0F, 1.0F, "+/- %.4f");
+        changed |= labeled_slider("Sensor lag", &s.sensor_lag_ms, 0.0F, 100.0F, "%.1f ms");
+        changed |= labeled_slider("Dead time", &s.dead_time_ms, 0.0F, 500.0F, "%.0f ms");
+        changed |= labeled_input("Disturbance time (s)", &s.disturbance_time);
+        changed |= labeled_input("Disturbance (actuator units)", &s.disturbance);
 
         ImGui::Spacing();
-        if (ImGui::Button("Run Simulation", ImVec2{-1.0F, 42.0F})) {
-        ImGui::Spacing();
-        if (ImGui::Button("Run Simulation", ImVec2{-1.0F, 42.0F})) {
-            run_simulation(settings, data);
+        ImGui::Checkbox("Re-run on every change", &app.auto_run);
+        if (ImGui::Button("Run simulation", ImVec2{-1.0F, 36.0F}) || (changed && app.auto_run)) {
+            lab::run_simulation(s, app.trace);
         }
-
+        if (ImGui::Button("Export CSV", ImVec2{-1.0F, 0.0F})) {
+            app.trace.status = lab::export_csv(app.trace, "pidpp_control_lab.csv")
+                                   ? "Exported pidpp_control_lab.csv"
+                                   : "CSV export failed";
+        }
         ImGui::Spacing();
-        ImGui::TextUnformatted("Status");
-        ImGui::TextWrapped("%s", data.status.c_str());
-        ImGui::Spacing();
-        ImGui::TextUnformatted("Status");
-        ImGui::TextWrapped("%s", data.status.c_str());
+        ImGui::TextWrapped("%s", app.trace.status.c_str());
     }
-    ImGui::EndChild();
     ImGui::EndChild();
 }
 
-void draw_metrics_panel(const GuiSettings& settings, const SimulationData& data,
-                        const ImVec2& size) {
+void draw_metric(const char* label, const char* value) {
+    ImGui::TableNextColumn();
+    ImGui::TextDisabled("%s", label);
+    ImGui::TextUnformatted(value);
+}
+
+void draw_metrics_panel(const AppState& app, const ImVec2& size) {
     if (ImGui::BeginChild("ResultsPanel", size, ImGuiChildFlags_Border)) {
-        ImGui::TextUnformatted("Results");
-        ImGui::TextDisabled("%s", plant_name(static_cast<PlantModel>(settings.plant_model)));
-        ImGui::Spacing();
-
-        char buffer[64]{};
-        std::snprintf(buffer, sizeof(buffer), "%zu samples", data.time.size());
-        draw_metric_card("Samples", buffer);
-
-        std::snprintf(buffer, sizeof(buffer), "%.4f", data.metrics.final_value);
-        draw_metric_card("Final value", buffer);
-
-        std::snprintf(buffer, sizeof(buffer), "%.4f", data.metrics.peak_value);
-        draw_metric_card("Peak value", buffer);
-
-        std::snprintf(buffer, sizeof(buffer), "%.2f %%", data.metrics.overshoot_percent);
-        draw_metric_card("Overshoot", buffer);
-
-        std::snprintf(buffer, sizeof(buffer), "%.4f s", data.metrics.rise_time);
-        draw_metric_card("Rise time", buffer);
-
-void draw_metrics_panel(const GuiSettings& settings, const SimulationData& data,
-                        const ImVec2& size) {
-    if (ImGui::BeginChild("ResultsPanel", size, ImGuiChildFlags_Border)) {
-        ImGui::TextUnformatted("Results");
-        ImGui::TextDisabled("%s", plant_name(static_cast<PlantModel>(settings.plant_model)));
-        ImGui::Spacing();
-
-        char buffer[64]{};
-        std::snprintf(buffer, sizeof(buffer), "%zu samples", data.time.size());
-        draw_metric_card("Samples", buffer);
-
-        std::snprintf(buffer, sizeof(buffer), "%.4f", data.metrics.final_value);
-        draw_metric_card("Final value", buffer);
-
-        std::snprintf(buffer, sizeof(buffer), "%.4f", data.metrics.peak_value);
-        draw_metric_card("Peak value", buffer);
-
-        std::snprintf(buffer, sizeof(buffer), "%.2f %%", data.metrics.overshoot_percent);
-        draw_metric_card("Overshoot", buffer);
-
-        std::snprintf(buffer, sizeof(buffer), "%.4f s", data.metrics.rise_time);
-        draw_metric_card("Rise time", buffer);
-
-        if (data.metrics.settled) {
-            std::snprintf(buffer, sizeof(buffer), "%.4f s", data.metrics.settling_time);
-            std::snprintf(buffer, sizeof(buffer), "%.4f s", data.metrics.settling_time);
-        } else {
-            std::snprintf(buffer, sizeof(buffer), "%s", "not settled");
-            std::snprintf(buffer, sizeof(buffer), "%s", "not settled");
+        const auto& m = app.trace.metrics;
+        ImGui::Text("Results: %s",
+                    lab::plant_name(static_cast<lab::PlantModel>(app.settings.plant)));
+        if (ImGui::BeginTable("Metrics", 4, ImGuiTableFlags_SizingStretchSame)) {
+            char buffer[64]{};
+            std::snprintf(buffer, sizeof(buffer), "%.4f", m.final_value);
+            draw_metric("Final value", buffer);
+            std::snprintf(buffer, sizeof(buffer), "%.4f", m.peak_value);
+            draw_metric("Peak value", buffer);
+            std::snprintf(buffer, sizeof(buffer), "%.2f %%", m.overshoot_percent);
+            draw_metric("Overshoot", buffer);
+            std::snprintf(buffer, sizeof(buffer), "%.4f", m.steady_state_error);
+            draw_metric("Steady-state error", buffer);
+            if (m.rose) {
+                std::snprintf(buffer, sizeof(buffer), "%.4f s", m.rise_time);
+            } else {
+                std::snprintf(buffer, sizeof(buffer), "did not reach 90 %%");
+            }
+            draw_metric("Rise time (10-90 %)", buffer);
+            if (m.settled) {
+                std::snprintf(buffer, sizeof(buffer), "%.4f s", m.settling_time);
+            } else {
+                std::snprintf(buffer, sizeof(buffer), "not settled");
+            }
+            draw_metric("Settling (2 %)", buffer);
+            std::snprintf(buffer, sizeof(buffer), "%.4f", m.integral_absolute_error);
+            draw_metric("IAE", buffer);
+            std::snprintf(buffer, sizeof(buffer), "%zu", app.trace.time.size());
+            draw_metric("Samples", buffer);
+            ImGui::EndTable();
         }
-        draw_metric_card("Settling", buffer);
-        draw_metric_card("Settling", buffer);
     }
-    ImGui::EndChild();
     ImGui::EndChild();
 }
 
-void draw_plot_panel(const SimulationData& data, const ImVec2& size) {
+void draw_plot_panel(const AppState& app, const ImVec2& size) {
     if (ImGui::BeginChild("PlotsPanel", size, ImGuiChildFlags_Border)) {
-        ImGui::TextUnformatted("Plots");
-        ImGui::TextDisabled("Response and actuator behavior across the simulation horizon.");
-        ImGui::Spacing();
-
-void draw_plot_panel(const SimulationData& data, const ImVec2& size) {
-    if (ImGui::BeginChild("PlotsPanel", size, ImGuiChildFlags_Border)) {
-        ImGui::TextUnformatted("Plots");
-        ImGui::TextDisabled("Response and actuator behavior across the simulation horizon.");
-        ImGui::Spacing();
-
-        if (data.time.empty()) {
+        const auto& trace = app.trace;
+        if (trace.time.empty()) {
             ImGui::TextUnformatted("Run a simulation to display plots.");
         } else {
-            const int count = static_cast<int>(data.time.size());
-            const float available_height = ImGui::GetContentRegionAvail().y;
-            const float response_height = std::max(240.0F, available_height * 0.6F);
-            const float command_height =
-                std::max(180.0F, available_height - response_height - 18.0F);
+            const int count = static_cast<int>(trace.time.size());
+            const float height = ImGui::GetContentRegionAvail().y;
+            const float row = std::max(150.0F, (height - 20.0F) / 3.0F);
 
-            if (ImPlot::BeginPlot("Response", ImVec2{-1.0F, response_height})) {
-                ImPlot::SetupAxes("Time [s]", "Value");
-                ImPlot::PlotLine("Setpoint", data.time.data(), data.setpoint.data(), count);
-                ImPlot::PlotLine("Measurement", data.time.data(), data.measurement.data(), count);
+            if (ImPlot::BeginPlot("Response", ImVec2{-1.0F, row})) {
+                ImPlot::SetupAxes("Time [s]", "Value", ImPlotAxisFlags_AutoFit,
+                                  ImPlotAxisFlags_AutoFit);
+                ImPlot::PlotLine("Setpoint", trace.time.data(), trace.setpoint.data(), count);
+                ImPlot::PlotLine("Measurement", trace.time.data(), trace.measurement.data(), count);
                 ImPlot::EndPlot();
             }
-
-            if (ImPlot::BeginPlot("Controller command", ImVec2{-1.0F, command_height})) {
-            if (ImPlot::BeginPlot("Controller command", ImVec2{-1.0F, command_height})) {
-                ImPlot::SetupAxes("Time [s]", "Command");
-                ImPlot::PlotLine("Command", data.time.data(), data.command.data(), count);
+            if (ImPlot::BeginPlot("Actuator command", ImVec2{-1.0F, row})) {
+                ImPlot::SetupAxes("Time [s]", "Command", ImPlotAxisFlags_AutoFit,
+                                  ImPlotAxisFlags_AutoFit);
+                ImPlot::PlotLine("Command", trace.time.data(), trace.command.data(), count);
+                ImPlot::EndPlot();
+            }
+            if (ImPlot::BeginPlot("Controller terms", ImVec2{-1.0F, row})) {
+                ImPlot::SetupAxes("Time [s]", "Contribution", ImPlotAxisFlags_AutoFit,
+                                  ImPlotAxisFlags_AutoFit);
+                ImPlot::PlotLine("P", trace.time.data(), trace.p_term.data(), count);
+                ImPlot::PlotLine("I", trace.time.data(), trace.i_term.data(), count);
+                ImPlot::PlotLine("D", trace.time.data(), trace.d_term.data(), count);
+                ImPlot::PlotLine("FF", trace.time.data(), trace.ff_term.data(), count);
                 ImPlot::EndPlot();
             }
         }
     }
-    ImGui::End();
+    ImGui::EndChild();
 }
 
-void glfw_error_callback(int error, const char* description) {
-    std::fprintf(stderr, "GLFW error %d: %s\n", error, description);
-}
-
-void draw_main_workspace(GuiSettings& settings, SimulationData& data) {
+void draw_workspace(AppState& app) {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
@@ -479,27 +279,59 @@ void draw_main_workspace(GuiSettings& settings, SimulationData& data) {
 
     if (ImGui::Begin("PIDPP Workspace", nullptr, window_flags)) {
         const ImVec2 available = ImGui::GetContentRegionAvail();
-        const float left_width = std::clamp(available.x * 0.30F, 300.0F, 420.0F);
         const float gap = 16.0F;
+        const float left_width = std::clamp(available.x * 0.30F, 300.0F, 420.0F);
         const float right_width = available.x - left_width - gap;
-        const float results_height = std::clamp(available.y * 0.32F, 220.0F, 340.0F);
+        const float results_height = 132.0F;
 
-        draw_config_panel(settings, data, ImVec2{left_width, available.y});
-
+        draw_config_panel(app, ImVec2{left_width, available.y});
         ImGui::SameLine(0.0F, gap);
         if (ImGui::BeginChild("RightColumn", ImVec2{right_width, available.y},
                               ImGuiChildFlags_None)) {
-            draw_metrics_panel(settings, data, ImVec2{right_width, results_height});
-            draw_plot_panel(data, ImVec2{right_width, available.y - results_height - gap});
+            draw_metrics_panel(app, ImVec2{right_width, results_height});
+            draw_plot_panel(app, ImVec2{right_width, available.y - results_height - gap});
         }
         ImGui::EndChild();
     }
     ImGui::End();
 }
 
+void glfw_error_callback(int error, const char* description) {
+    std::fprintf(stderr, "GLFW error %d: %s\n", error, description);
+}
+
+/// Runs every preset (and an autotune on the stable process plants) without
+/// opening a window. Returns a process exit code.
+int run_headless() {
+    bool ok = true;
+    for (int i = 0; i < static_cast<int>(lab::PlantModel::Count); ++i) {
+        const auto model = static_cast<lab::PlantModel>(i);
+        lab::Trace trace;
+        lab::run_simulation(lab::defaults_for(model), trace);
+        const auto& m = trace.metrics;
+        std::printf("%-28s valid=%d final=%9.4f overshoot=%7.2f%% settled=%d settling=%7.3f s\n",
+                    lab::plant_name(model), trace.valid ? 1 : 0, m.final_value, m.overshoot_percent,
+                    m.settled ? 1 : 0, m.settling_time);
+        ok &= trace.valid;
+    }
+    for (const auto model : {lab::PlantModel::FirstOrder, lab::PlantModel::DcMotorVelocity}) {
+        const auto outcome = lab::autotune(lab::defaults_for(model));
+        std::printf("autotune %-19s %s (Ku=%.4g Tu=%.4g)\n", lab::plant_name(model),
+                    outcome.message.c_str(), outcome.result.ultimate_gain,
+                    outcome.result.ultimate_period);
+    }
+    return ok ? 0 : 1;
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+        if (std::string_view{argv[i]} == "--headless") {
+            return run_headless();
+        }
+    }
+
     glfwSetErrorCallback(glfw_error_callback);
     if (glfwInit() == 0) {
         return 1;
@@ -509,7 +341,7 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    GLFWwindow* window = glfwCreateWindow(1280, 800, "PIDPP Control Lab", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1440, 900, "PID++ Control Lab", nullptr, nullptr);
     if (window == nullptr) {
         glfwTerminate();
         return 1;
@@ -524,16 +356,15 @@ int main() {
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.IniFilename = nullptr;
 
     ImGui::StyleColorsDark();
-    apply_app_style();
     apply_app_style();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    GuiSettings settings{};
-    SimulationData data{};
-    run_simulation(settings, data);
+    AppState app{};
+    lab::run_simulation(app.settings, app.trace);
 
     while (glfwWindowShouldClose(window) == 0) {
         glfwPollEvents();
@@ -542,8 +373,7 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        draw_main_workspace(settings, data);
-        draw_main_workspace(settings, data);
+        draw_workspace(app);
 
         ImGui::Render();
 
