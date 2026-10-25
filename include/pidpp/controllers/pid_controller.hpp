@@ -57,6 +57,9 @@ template <std::floating_point T> class PidController {
     /**
      * Computes one control step.
      *
+     * @param setpoint                 desired value of the controlled variable
+     * @param measurement              measured value of the controlled variable
+     * @param dt                       time since the previous update in seconds (> 0)
      * @param feedforward_velocity     reference velocity passed to the feedforward model
      * @param feedforward_acceleration reference acceleration passed to the feedforward model
      * @return the saturated (and rate limited) actuator command

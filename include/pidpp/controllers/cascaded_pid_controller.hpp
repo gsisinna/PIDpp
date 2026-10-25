@@ -59,8 +59,16 @@ template <std::floating_point T> class CascadedPidController {
     }
 
     /**
-     * @param dt inner loop period; the outer loop integrates over
-     *           `dt * outer_decimation`.
+     * Runs one inner-loop period (and the outer loop when it is due).
+     *
+     * @param outer_setpoint    outer loop reference (e.g. position)
+     * @param outer_measurement outer loop feedback (e.g. measured position)
+     * @param inner_measurement inner loop feedback (e.g. measured velocity)
+     * @param dt                inner loop period in seconds; the outer loop
+     *                          integrates over `dt * outer_decimation`
+     * @param feedforward_velocity     reference velocity forwarded to both stages
+     * @param feedforward_acceleration reference acceleration forwarded to both stages
+     * @return the actuator command produced by the inner loop
      */
     [[nodiscard]] T update(T outer_setpoint, T outer_measurement, T inner_measurement, T dt,
                            T feedforward_velocity, T feedforward_acceleration) noexcept {

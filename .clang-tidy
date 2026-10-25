@@ -1,17 +1,26 @@
+# Static analysis for the PID++ library headers (checked through src/*.cpp).
+#
+# Disabled on purpose:
+# - bugprone-easily-swappable-parameters: control APIs naturally take several
+#   floating-point arguments (setpoint, measurement, dt, ...).
+# - modernize-macro-to-enum: PIDPP_VERSION_* must stay macros so they can be
+#   used in preprocessor conditionals by consumers.
 Checks: >
   -*,
   bugprone-*,
+  -bugprone-easily-swappable-parameters,
   clang-analyzer-*,
   cppcoreguidelines-avoid-goto,
   cppcoreguidelines-pro-type-member-init,
   modernize-*,
   -modernize-use-trailing-return-type,
+  -modernize-macro-to-enum,
   performance-*,
   portability-*,
   readability-braces-around-statements,
   readability-identifier-naming,
   readability-redundant-member-init
-WarningsAsErrors: ''
+WarningsAsErrors: '*'
 HeaderFilterRegex: 'include/pidpp/.*'
 CheckOptions:
   - key: readability-identifier-naming.NamespaceCase
