@@ -2,18 +2,18 @@
 
 #include <concepts>
 
-#include <pidpp/controllers/pid_controller.hpp>
+#include <pidpp/controllers/cascaded_pid_controller.hpp>
 
 namespace pidpp::experimental {
 
 /**
- * Placeholder for future cascaded PID composition.
+ * Deprecated experimental aliases kept for source compatibility.
  *
- * Experimental APIs are source-unstable and may change in any release.
+ * Cascaded PID graduated to the stable API in 0.2.0: use
+ * pidpp::CascadedPidConfig and pidpp::CascadedPidController.
  */
-template <std::floating_point T> struct CascadedPidControllerConfig {
-    PidConfig<T> outer{};
-    PidConfig<T> inner{};
-};
+template <std::floating_point T> using CascadedPidControllerConfig = pidpp::CascadedPidConfig<T>;
+
+template <std::floating_point T> using CascadedPidController = pidpp::CascadedPidController<T>;
 
 } // namespace pidpp::experimental

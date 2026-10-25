@@ -20,14 +20,12 @@ TEST_CASE("result and error are small value types") {
 }
 
 TEST_CASE("version API reports SDK version") {
-    REQUIRE(PIDPP_VERSION_MAJOR == 0);
-    REQUIRE(PIDPP_VERSION_MINOR == 1);
-    REQUIRE(PIDPP_VERSION_PATCH == 0);
-    REQUIRE(pidpp::version_major() == 0);
-    REQUIRE(pidpp::version_minor() == 1);
-    REQUIRE(pidpp::version_patch() == 0);
-    REQUIRE(std::string_view{pidpp::version_string()} == "0.1.0");
-    REQUIRE(std::string_view{pidpp::version()} == "0.1.0");
+    REQUIRE(pidpp::version_major() == PIDPP_VERSION_MAJOR);
+    REQUIRE(pidpp::version_minor() == PIDPP_VERSION_MINOR);
+    REQUIRE(pidpp::version_patch() == PIDPP_VERSION_PATCH);
+    // PIDPP_EXPECTED_VERSION is injected by CMake from project(VERSION ...).
+    REQUIRE(std::string_view{pidpp::version_string()} == PIDPP_EXPECTED_VERSION);
+    REQUIRE(std::string_view{pidpp::version()} == PIDPP_EXPECTED_VERSION);
 }
 
 TEST_CASE("default PID config is valid") {
@@ -72,4 +70,52 @@ TEST_CASE("time step validation rejects zero") {
 
     REQUIRE_FALSE(result);
     REQUIRE(result.code() == pidpp::ErrorCode::InvalidDt);
+}
+
+TEST_CASE("time step validation rejects non finite and negative values") {
+    REQUIRE_FALSE(pidpp::validate_time_step(std::numeric_limits<double>::quiet_NaN()));
+    REQUIRE_FALSE(pidpp::validate_time_step(-0.001));
+    REQUIRE(pidpp::validate_time_step(0.001));
+}
+
+TEST_CASE("extended config fields are validated") {
+    pidpp::PidConfig<double> config{};
+
+    config.error_deadband = -1.0;
+    REQUIRE(config.validate().code() == pidpp::ErrorCode::InvalidConfiguration);
+    config.error_deadband = 0.0;
+
+    config.output_rate_limit = -1.0;
+    REQUIRE(config.validate().code() == pidpp::ErrorCode::InvalidConfiguration);
+    config.output_rate_limit = 0.0;
+
+    config.continuous_input = true;
+    config.input_range_min = 1.0;
+    config.input_range_max = 1.0;
+    REQUIRE(config.validate().code() == pidpp::ErrorCode::InvalidConfiguration);
+    config.input_range_max = 2.0;
+    REQUIRE(config.validate());
+
+    config.feedforward.friction_gain = std::numeric_limits<double>::infinity();
+    REQUIRE(config.validate().code() == pidpp::ErrorCode::InvalidConfiguration);
+}
+
+TEST_CASE("pid gains round trip through the config") {
+    pidpp::PidConfig<double> config{};
+    config.set_gains({1.0, 2.0, 3.0});
+
+    const auto gains = config.gains();
+
+    REQUIRE(gains.kp == 1.0);
+    REQUIRE(gains.ki == 2.0);
+    REQUIRE(gains.kd == 3.0);
+    REQUIRE(config.validate());
+}
+
+TEST_CASE("float controllers are supported") {
+    pidpp::PidConfig<float> config{.kp = 2.0F, .output_min = -5.0F, .output_max = 5.0F};
+    REQUIRE(config.validate());
+    pidpp::PidController<float> controller{config};
+
+    REQUIRE(controller.update(1.0F, 0.0F, 0.01F) == 2.0F);
 }

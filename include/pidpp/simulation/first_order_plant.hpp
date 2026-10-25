@@ -14,7 +14,7 @@ template <std::floating_point T> class FirstOrderPlant {
     constexpr FirstOrderPlant(T gain, T time_constant, T initial_state = T{0}) noexcept
         : gain_{gain}, time_constant_{time_constant}, state_{initial_state} {}
 
-    [[nodiscard]] constexpr T update(T input, T dt) noexcept {
+    constexpr T update(T input, T dt) noexcept {
         if (!is_finite(dt) || dt <= T{0} || time_constant_ <= T{0}) {
             return state_;
         }

@@ -1,19 +1,21 @@
 #pragma once
 
 #include <concepts>
-#include <span>
+#include <cstddef>
 
-#include <pidpp/controllers/pid_config.hpp>
+#include <pidpp/controllers/gain_scheduled_pid_controller.hpp>
 
 namespace pidpp::experimental {
 
-template <std::floating_point T> struct GainSchedulePoint {
-    T scheduling_value{0};
-    PidConfig<T> config{};
-};
+/**
+ * Deprecated experimental aliases kept for source compatibility.
+ *
+ * Gain scheduling graduated to the stable API in 0.2.0: use
+ * pidpp::GainSchedulePoint and pidpp::GainScheduledPidController.
+ */
+template <std::floating_point T> using GainSchedulePoint = pidpp::GainSchedulePoint<T>;
 
-template <std::floating_point T> struct GainScheduledPidControllerConfig {
-    std::span<const GainSchedulePoint<T>> points{};
-};
+template <std::floating_point T, std::size_t MaxPoints>
+using GainScheduledPidController = pidpp::GainScheduledPidController<T, MaxPoints>;
 
 } // namespace pidpp::experimental

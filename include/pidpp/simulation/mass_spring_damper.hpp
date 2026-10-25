@@ -14,7 +14,7 @@ template <std::floating_point T> class MassSpringDamper {
     constexpr MassSpringDamper(T mass, T damping, T stiffness) noexcept
         : mass_{mass}, damping_{damping}, stiffness_{stiffness} {}
 
-    [[nodiscard]] constexpr T update(T force, T dt) noexcept {
+    constexpr T update(T force, T dt) noexcept {
         if (!is_finite(dt) || dt <= T{0} || mass_ <= T{0}) {
             return position_;
         }

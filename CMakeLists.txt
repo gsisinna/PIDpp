@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(PIDPP
-    VERSION 0.1.0
-    DESCRIPTION "PIDPP Control Engine"
+    VERSION 0.2.0
+    DESCRIPTION "PID++ Control Engine: deterministic C++20 PID control for robotics"
+    HOMEPAGE_URL "https://github.com/gsisinna/PIDpp"
     LANGUAGES CXX
 )
 
@@ -33,6 +34,15 @@ option(PIDPP_INSTALL "Install PIDPP targets, headers, and package metadata" ON)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+
+# Keep include/pidpp/version.hpp in sync with the CMake project version.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/include/pidpp/version.hpp" PIDPP_VERSION_HEADER)
+string(REGEX MATCH "PIDPP_VERSION_STRING \"([0-9]+[.][0-9]+[.][0-9]+)\"" _ "${PIDPP_VERSION_HEADER}")
+if(NOT CMAKE_MATCH_1 STREQUAL PROJECT_VERSION)
+    message(FATAL_ERROR
+        "include/pidpp/version.hpp reports '${CMAKE_MATCH_1}' but the project version is "
+        "'${PROJECT_VERSION}'. Update both together.")
+endif()
 
 add_library(pidpp
     src/version.cpp
@@ -126,4 +136,26 @@ endif()
 
 if(PIDPP_BUILD_GUI)
     add_subdirectory(tools/gui)
+endif()
+
+if(PIDPP_BUILD_DOCS)
+    find_package(Doxygen)
+    if(DOXYGEN_FOUND)
+        set(DOXYGEN_PROJECT_NAME "PID++")
+        set(DOXYGEN_PROJECT_NUMBER ${PROJECT_VERSION})
+        set(DOXYGEN_PROJECT_BRIEF "${PROJECT_DESCRIPTION}")
+        set(DOXYGEN_USE_MDFILE_AS_MAINPAGE "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+        set(DOXYGEN_EXCLUDE_PATTERNS "*/internal/*")
+        set(DOXYGEN_EXTRACT_ALL YES)
+        set(DOXYGEN_GENERATE_TREEVIEW YES)
+        set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/docs")
+        doxygen_add_docs(pidpp_docs
+            "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
+            "${CMAKE_CURRENT_SOURCE_DIR}/docs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/include"
+            COMMENT "Generating PID++ API documentation"
+        )
+    else()
+        message(WARNING "PIDPP_BUILD_DOCS=ON but Doxygen was not found; docs target disabled.")
+    endif()
 endif()
