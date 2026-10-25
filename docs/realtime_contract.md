@@ -1,27 +1,42 @@
 # Real-Time Contract
 
-This contract applies to `pidpp::PidController<T>::update()`.
-
 ## Guaranteed
 
-- `update()` is `noexcept`.
-- `update()` does not allocate dynamic memory.
-- `update()` performs deterministic O(1) work.
-- `update()` does not log.
-- `update()` does not use virtual dispatch.
-- Invalid `dt`, setpoint, or measurement returns the previous output and records the condition in controller state.
+The following functions are `noexcept`, do not allocate, do not log, do not use virtual
+dispatch, and perform bounded work:
 
-## Outside The Contract
+| Function | Complexity |
+| --- | --- |
+| `PidController<T>::update()` / `update_with_feedforward()` | O(1) |
+| `CascadedPidController<T>::update()` | O(1) |
+| `GainScheduledPidController<T, N>::update()` | O(N) |
+| `RelayAutotuner<T>::update()` | O(1) |
+| `TrapezoidalProfile<T>::plan()` / `sample()` | O(1) |
+| `LowPassFilter`, `MovingAverage`, `SlewRateLimiter` `update()` | O(1) |
+| `PidController<T>::set_gains()` / `set_config()` / `reset()` | O(1) |
 
-The following modules are useful SDK components but are not guaranteed hard real-time:
+Invalid `dt` (zero, negative, NaN, infinite), setpoint, measurement, or feedforward input makes a
+controller return its previous output and set `state().last_dt_valid = false`.
 
-- `metrics`: offline response analysis.
-- `autotune`: tuning workflows.
-- `simulation`: plant examples and deterministic tests.
-- examples and benchmarks.
+The unit tests replace global `operator new` and assert that 1000 consecutive `update()` calls
+perform zero allocations.
 
-## Integration Guidance
+## Outside the contract
 
-Validate configuration before entering a control loop. Keep logging, allocation, I/O, and parameter loading outside the loop. Apply runtime gain updates at controlled synchronization points in your robot software.
+These modules are useful SDK components but are intended for setup, analysis, or simulation:
 
-`PIDPP_EMBEDDED_PROFILE=ON` selects embedded-friendly build defaults by disabling nonessential build targets.
+- `validate()` functions (cheap, but call them before entering the loop);
+- `GainScheduledPidController::set_schedule()` (copies and validates the table);
+- `metrics`: offline response analysis over spans;
+- `simulation`: plant models for examples and tests;
+- examples, benchmarks, and the Control Lab.
+
+## Integration guidance
+
+- Validate configuration before entering a control loop and refuse to start on error.
+- Keep logging, allocation, I/O, and parameter loading outside the loop; copy `state()` into a
+  lock-free buffer if you need telemetry.
+- Measure `dt` from a monotonic clock and pass the real value.
+- Apply runtime gain changes at a controlled synchronization point (for example between two
+  cycles, from a double buffer).
+- `PIDPP_EMBEDDED_PROFILE=ON` disables tests, examples, benchmarks, and docs for firmware builds.

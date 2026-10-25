@@ -43,7 +43,7 @@ jobs:
             sanitizers: OFF
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install toolchain
         run: |
@@ -74,7 +74,7 @@ jobs:
       matrix:
         build_type: [Debug, Release]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Configure
         run: cmake -S . -B build -A x64 -DPIDPP_BUILD_TESTS=ON -DPIDPP_BUILD_EXAMPLES=ON
@@ -89,7 +89,7 @@ jobs:
     name: macos appleclang Release
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPIDPP_BUILD_TESTS=ON -DPIDPP_BUILD_EXAMPLES=ON
@@ -104,7 +104,7 @@ jobs:
     name: install and consume package
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build and install SDK
         run: |
@@ -125,7 +125,7 @@ jobs:
     name: control lab GUI
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install GUI dependencies
         run: |
@@ -146,7 +146,7 @@ jobs:
     name: benchmarks
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build
         run: |
@@ -160,7 +160,7 @@ jobs:
   clang-format:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install clang-format 17
         run: pip install clang-format==17.0.6
@@ -173,7 +173,7 @@ jobs:
   clang-tidy:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install tools
         run: |
@@ -192,7 +192,7 @@ jobs:
   docs:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Doxygen
         run: |

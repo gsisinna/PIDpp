@@ -1,60 +1,89 @@
 # Architecture
 
-PID++ Control Engine is organized as a small, deterministic C++20 SDK. The public namespace is `pidpp`, the installable CMake target is `pidpp::pidpp`, and the main facade header is `pidpp/pidpp.hpp`.
+PID++ is a small, deterministic C++20 SDK. The public namespace is `pidpp`, the installable CMake
+target is `pidpp::pidpp`, and the facade header is `pidpp/pidpp.hpp`.
 
-## Module Boundaries
+## Module map
 
-`core` contains shared primitives: numeric helpers, result reporting, time-step validation, and saturation utilities. These headers have no dependency on controller implementations.
+```
+include/pidpp/
+  core/          numeric helpers, Result/ErrorCode, dt validation, saturation, deadband, angles
+  controllers/   PidConfig, PidController, feedforward, anti-windup and derivative policies,
+                 CascadedPidController, GainScheduledPidController
+  filters/       LowPassFilter, MovingAverage, SlewRateLimiter
+  motion/        TrapezoidalProfile
+  autotune/      RelayAutotuner, tuning rules
+  metrics/       step-response and tracking metrics (offline)
+  simulation/    plant models for examples, tests, and the Control Lab
+  experimental/  source-unstable aliases and placeholders (not in the facade)
+  internal/      implementation details (not public API)
+src/version.cpp  compiled version symbol
+tools/gui/       optional Control Lab (simulation core + ImGui front-end)
+```
 
-`controllers` contains real-time controller components. `PidConfig<T>` owns validation and tunable parameters. `PidController<T>` owns state and update logic. Anti-windup, derivative mode, and feedforward are separate value-type concepts so future controllers can reuse them without inheriting from a shared base class.
+Dependencies point downward: `core` depends on nothing else; `filters` and `motion` depend on
+`core`; `controllers` depends on `core` and `filters`; `autotune` depends on `controllers`;
+`metrics` and `simulation` depend only on `core`.
 
-`filters` contains deterministic filters. `LowPassFilter<T>` is a small stateful single-pole filter. `MovingAverage<T, N>` uses `std::array` and a compile-time window size, so it does not allocate.
+## Controller data flow
 
-`autotune` contains relay autotuning interfaces. The current implementation provides deterministic relay switching and leaves richer ultimate gain and period estimation as future work.
+One `PidController<T>::update()` call:
 
-`metrics` is offline analysis. It accepts caller-owned spans and may trade runtime cost for clarity because it is not intended for real-time loops.
+```
+setpoint, measurement
+   -> error = setpoint - measurement
+   -> wrap to half the input range           (continuous_input)
+   -> continuous deadband                    (error_deadband)
+   -> P = kp * error
+   -> D = kd * filtered derivative           (OnError or OnMeasurement, derivative_filter_tau)
+   -> FF = FeedforwardConfig(v, a) or the external term from update_with_feedforward()
+   -> output bounds = output limits, narrowed by output_rate_limit * dt
+   -> candidate integral, then the anti-windup policy decides the new integral
+   -> output = clamp(P + ki * integral + D + FF, bounds)
+```
 
-`simulation` contains lightweight plant models used by examples and tests. These are useful for control design smoke tests, not high-fidelity physics.
+All intermediate terms are stored in `PidState<T>` for logging and diagnostics.
 
-`experimental` contains source-unstable extension points. These headers are not included by the facade and should be opted into explicitly.
+## Real-time constraints
 
-`internal` contains implementation details. Downstream projects should not include these headers directly.
+`update()` must be deterministic and allocation-free. It is `noexcept`, keeps all mutable state
+inside the object, uses no allocating containers, and performs no virtual dispatch. Invalid
+inputs are rejected defensively by returning the previous output.
 
-## Real-Time Constraints
+Configuration validation is explicit and should happen before a controller enters a real-time
+loop. Runtime gain updates are supported and bumpless, but callers are responsible for applying
+validated values at controlled synchronization points.
 
-The central rule is that `PidController<T>::update()` must be deterministic and allocation-free. The update path:
+## Design trade-offs
 
-- is marked `noexcept`;
-- stores all mutable state inside the controller object;
-- uses no standard containers that allocate;
-- performs no virtual dispatch;
-- validates invalid `dt`, setpoint, and measurement values defensively by returning the previous output.
+**Header-first.** Robotics users often need transparent templates, inlining, and easy
+cross-compilation. The library is not purely header-only: `version()` is compiled and the
+project installs a normal CMake target, leaving room for non-template code.
 
-Configuration validation is explicit and should happen before a controller enters a real-time loop. Runtime gain updates are supported, but callers are responsible for applying validated values when operating in safety-critical systems.
+**Composition over inheritance.** `CascadedPidController` owns two `PidController`s and
+`GainScheduledPidController` owns one plus a table. No virtual interfaces sit in hot paths.
 
-## Design Tradeoffs
+**Values, not exceptions.** `validate()` returns `Result` (an error code plus a static message).
+The hot path never throws and never returns errors; it reports invalid input through
+`state().last_dt_valid`.
 
-The library is header-first because robotics users often need transparent templates, inlining, and easy cross-compilation. It is not purely header-only: the facade exposes a compiled `version()` symbol and the project installs a normal CMake target, leaving room for future non-template implementation files.
+**Fixed capacity.** Gain schedules use `std::array` storage sized by a template parameter;
+moving averages use a compile-time window. Nothing in the controllers allocates.
 
-Composition is preferred over inheritance. This keeps hot paths predictable and leaves room for policy-style extension without forcing virtual interfaces into control loops.
+**Integrator units.** The integrator stores accumulated error (error * seconds) and the integral
+contribution is `ki * integral`. When `ki` changes, the integrator is rescaled so the
+contribution stays continuous.
 
-Invalid time steps in `update()` do not throw and do not return an error object because the hot path must stay small and hard to misuse. Instead, the controller preserves the previous output and records `state().last_dt_valid`.
+## Control Lab
 
-Anti-windup behavior is selected by enum:
+`tools/gui` is split into `lab_simulation` (plants, transport delay, sensor lag, noise,
+autotune, CSV export; no GUI dependencies) and `main.cpp` (ImGui/ImPlot front-end). The
+simulation core runs headless in CI.
 
-- `None`: integrate and clamp only to configured integral bounds.
-- `Clamping`: explicit integral clamping.
-- `ConditionalIntegration`: only integrate when saturation is not being driven deeper.
-- `BackCalculation`: apply a bounded correction from saturated output error.
+## Extension ideas
 
-## Extension Strategy
-
-Cascaded PID can be added as a composed controller that owns two or more `PidController<T>` instances and defines the signal contract between stages.
-
-Gain scheduling should use fixed-size tables or caller-owned spans to preserve deterministic memory behavior. Scheduling policies can produce a `PidConfig<T>` or direct gain triplet without changing the PID update algorithm.
-
-Adaptive control can be introduced as a parameter update policy that runs at a slower supervisory rate. The policy should validate and apply gains outside the tightest update path when possible.
-
-Feedforward can grow from the current velocity, acceleration, and static terms into profile-aware policies. The controller already accepts feedforward inputs without requiring inheritance.
-
-Lightweight MPC should live in its own module with explicit problem-size templates or fixed-capacity workspaces. It should not pull heap allocation or large solver dependencies into the PID core.
+- Two-degree-of-freedom PID with setpoint weighting.
+- Biquad and notch filters for structural resonances.
+- S-curve (jerk-limited) motion profiles.
+- Lightweight MPC with explicit problem-size templates and fixed workspaces, kept out of the PID
+  core.

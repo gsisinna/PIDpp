@@ -1,8 +1,8 @@
 {
   "name": "pidpp",
-  "version-semver": "0.1.0",
-  "description": "PIDPP Control Engine for robotics and embedded systems",
-  "homepage": "https://github.com/pidpp/pidpp",
+  "version-semver": "0.2.0",
+  "description": "Deterministic C++20 PID control for robotics and embedded systems",
+  "homepage": "https://github.com/gsisinna/PIDpp",
   "license": "MIT",
   "dependencies": []
 }

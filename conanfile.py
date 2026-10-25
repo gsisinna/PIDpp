@@ -4,12 +4,12 @@ from conan.tools.cmake import CMake, CMakeToolchain, cmake_layout
 
 class PidppConan(ConanFile):
     name = "pidpp"
-    version = "0.1.0"
+    version = "0.2.0"
     license = "MIT"
-    author = "PIDPP contributors"
-    url = "https://github.com/pidpp/pidpp"
-    description = "PIDPP Control Engine"
-    topics = ("pid", "robotics", "control", "embedded")
+    author = "Gabriele Sisinna"
+    url = "https://github.com/gsisinna/PIDpp"
+    description = "Deterministic C++20 PID control for robotics and embedded systems"
+    topics = ("pid", "robotics", "control", "embedded", "motion-control", "autotuning")
     settings = "os", "compiler", "build_type", "arch"
     generators = "CMakeDeps"
     exports_sources = "CMakeLists.txt", "cmake/*", "include/*", "src/*", "LICENSE"
@@ -23,6 +23,7 @@ class PidppConan(ConanFile):
         tc.variables["PIDPP_BUILD_TESTS"] = False
         tc.variables["PIDPP_BUILD_EXAMPLES"] = False
         tc.variables["PIDPP_BUILD_BENCHMARKS"] = False
+        tc.variables["PIDPP_BUILD_GUI"] = False
         tc.variables["PIDPP_INSTALL"] = True
         tc.generate()
 
